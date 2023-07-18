@@ -4,15 +4,17 @@ module Graphics.Vty.Platform.Windows
 where
 
 import Control.Monad (when)
-import Data.Maybe (fromMaybe)
 
 import Graphics.Vty (Vty, installCustomWidthTable, mkVtyFromPair)
 
 import Graphics.Vty.Config (VtyUserConfig(..))
--- import Graphics.Vty.Platform.Windows.Config
 import Graphics.Vty.Platform.Windows.Settings
-import Graphics.Vty.Platform.Windows.Input
-import Graphics.Vty.Platform.Windows.Output
+    ( defaultSettings, WindowsSettings(settingTermName) )
+import Graphics.Vty.Platform.Windows.Input ( buildInput )
+import Graphics.Vty.Platform.Windows.Output ( buildOutput )
+
+mkVty :: VtyUserConfig -> IO Vty
+mkVty userConfig = mkVtyWithSettings userConfig =<< defaultSettings
 
 -- | Create a Vty handle. At most one handle should be created at a time
 -- for a given terminal device.
@@ -22,10 +24,8 @@ import Graphics.Vty.Platform.Windows.Output
 -- precedence. See "Graphics.Vty.Config".
 --
 -- For most applications @mkVty defaultConfig@ is sufficient.
-mkVty :: VtyUserConfig -> Maybe WindowsSettings -> IO Vty
-mkVty userConfig mWindowsConfig = do
-    settings <- fromMaybe <$> defaultSettings <*> pure mWindowsConfig
-
+mkVtyWithSettings :: VtyUserConfig -> WindowsSettings -> IO Vty
+mkVtyWithSettings userConfig settings = do
     when (configAllowCustomUnicodeWidthTables userConfig /= Just False) $
         installCustomWidthTable (configDebugLog userConfig)
                                 (Just $ settingTermName settings)
