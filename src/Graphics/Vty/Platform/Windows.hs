@@ -1,5 +1,6 @@
 module Graphics.Vty.Platform.Windows
-  ( mkVty
+  ( mkVty,
+    mkVtyWithSettings
   )
 where
 

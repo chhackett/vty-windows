@@ -15,6 +15,7 @@ common warnings
 library
     import:           warnings
 
+    c-sources:        cbits/win_commands.c
     exposed-modules:  Data.Terminfo.Eval
                       Data.Terminfo.Parse
                       Graphics.Vty.Platform.Windows

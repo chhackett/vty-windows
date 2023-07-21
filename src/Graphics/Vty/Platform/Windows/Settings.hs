@@ -6,8 +6,8 @@ where
 
 import Data.Maybe ( fromMaybe ) 
 import Graphics.Vty.Attributes.Color ( ColorMode(..) )
-import Graphics.Vty.Platform.Windows.Output.Color
-import System.Environment (lookupEnv)
+import Graphics.Vty.Platform.Windows.Output.Color ( detectColorMode, defaultColorMode )
+import System.Environment ( lookupEnv )
 import System.IO ( Handle, stdin, stdout )
 
 -- | Runtime library settings for interacting with Windows terminals.
