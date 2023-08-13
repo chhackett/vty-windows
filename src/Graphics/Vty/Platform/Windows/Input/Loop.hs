@@ -4,17 +4,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_HADDOCK hide #-}
--- | The input layer used to be a single function that correctly
--- accounted for the non-threaded runtime by emulating the terminal
--- VMIN adn VTIME handling. This has been removed and replace with a
--- more straightforward parser. The non-threaded runtime is no longer
--- supported.
---
--- This is an example of an algorithm where code coverage could be high,
--- even 100%, but the behavior is still under tested. I should collect
--- more of these examples...
---
--- reference: http://www.Windowswiz.net/techtips/termios-vmin-vtime.html
+
+-- | The input layer forks a thread to read input data via the
+--   Windows console API. Key presses, mouse events, and window
+--   resize events are all obtained by calling ReadConsoleInputW.
 module Graphics.Vty.Platform.Windows.Input.Loop
   ( initInput
   )
@@ -27,14 +20,15 @@ import Graphics.Vty.Config (VtyUserConfig(..))
 import Graphics.Vty.Platform.Windows.Input.Classify ( classify )
 import Graphics.Vty.Platform.Windows.Input.Classify.Types
 import Graphics.Vty.Platform.Windows.WindowsConsoleInput ( WinConsoleInputEvent )
-import Graphics.Vty.Platform.Windows.WindowsInterfaces (readBuf, defaultDebugLog)
+import Graphics.Vty.Platform.Windows.WindowsInterfaces (readBuf)
 
 import Control.Applicative ( Alternative(many) )
 import Control.Concurrent
-import Control.Concurrent.STM
-import Control.Exception (mask, try, SomeException)
-import Lens.Micro hiding ((<>~))
-import Lens.Micro.Mtl
+    ( ThreadId, forkOS, killThread, newEmptyMVar, putMVar, takeMVar )
+import Control.Concurrent.STM ( atomically, writeTChan, newTChan )
+import Control.Exception (mask, try, catch, SomeException)
+import Lens.Micro ( over, ASetter, ASetter' )
+import Lens.Micro.Mtl ( (.=), use )
 import Control.Monad (unless, mzero, forM_)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans (lift)
@@ -52,6 +46,7 @@ import Data.Word (Word8)
 import Foreign (allocaArray)
 import Foreign.Ptr (Ptr, castPtr)
 
+import System.Environment (getEnv)
 import System.IO ( Handle )
 
 data InputBuffer = InputBuffer
@@ -98,11 +93,8 @@ addBytesToProcess block = unprocessedBytes <>= block
 emit :: Event -> InputM ()
 emit event = do
     logMsg $ "parsed event: " ++ show event
-    (lift $ asks eventChannel) >>= liftIO . atomically . flip writeTChan (InputEvent event)
+    lift (asks eventChannel) >>= liftIO . atomically . flip writeTChan (InputEvent event)
 
--- The timing requirements are assured by the VMIN and VTIME set for the
--- device.
---
 -- Precondition: Under the threaded runtime. Only current use is from a
 -- forkOS thread. That case satisfies precondition.
 readFromDevice :: InputM ByteString
@@ -171,10 +163,14 @@ runInputProcessorLoop classifyTable input handle = do
 initInput :: VtyUserConfig -> Handle -> ClassifyMap -> IO Input
 initInput userConfig handle classifyTable = do
     stopSync <- newEmptyMVar
+    mDefaultLog <- catch
+          (do debugLog <- getEnv "VTY_DEBUG_LOG"
+              return $ Just debugLog)
+          (\(_ :: IOError) -> return Nothing)
     input <- Input <$> atomically newTChan
                    <*> pure (return ())
                    <*> pure (return ())
-                   <*> maybe (return defaultDebugLog)
+                   <*> maybe (return $ append mDefaultLog)
                              (return . appendFile)
                              (configDebugLog userConfig)
     inputThread <- forkOSFinally (runInputProcessorLoop classifyTable input handle)
@@ -183,6 +179,11 @@ initInput userConfig handle classifyTable = do
           killThread inputThread
           takeMVar stopSync
     return $ input { shutdownInput = killAndWait }
+    where
+        append mDebugLog msg =
+          case mDebugLog of
+            Just debugLog -> appendFile debugLog $ msg ++ "\n"
+            Nothing       -> return ()
 
 forkOSFinally :: IO a -> (Either SomeException a -> IO ()) -> IO ThreadId
 forkOSFinally action and_then =

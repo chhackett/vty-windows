@@ -116,23 +116,18 @@ module Graphics.Vty.Platform.Windows.Input
   )
 where
 
-import Graphics.Vty.Config (VtyUserConfig(..))
-import Graphics.Vty.Input
+import Graphics.Vty.Config ( VtyUserConfig(..) )
+import Graphics.Vty.Input ( Input(restoreInputState, shutdownInput) )
 import Graphics.Vty.Platform.Windows.Input.Loop ( initInput )
-import Graphics.Vty.Platform.Windows.Input.Terminfo (classifyMapForTerm)
-
+import Graphics.Vty.Platform.Windows.Input.Terminfo ( classifyMapForTerm )
 import Graphics.Vty.Platform.Windows.Settings
     ( WindowsSettings(settingInputFd, settingTermName) )
+import Graphics.Vty.Platform.Windows.WindowsInterfaces ( configureInput )
 
-import Data.Bits ((.|.))
 import Data.Maybe ( isNothing )
 #if !MIN_VERSION_base(4,11,0)
 import Data.Monoid ((<>))
 #endif
-
-import System.IO ( Handle )
-import System.Win32.Console
-import System.Win32.Types ( withHandleToHANDLE )
 
 -- | Set up the terminal with file descriptor `inputFd` for input.
 -- Returns an 'Input'.
@@ -160,15 +155,3 @@ buildInput userConfig settings = do
             unsetAttrs
         , restoreInputState = restoreInputState input >> unsetAttrs
         }
-
-configureInput :: Handle -> IO (IO (), IO ())
-configureInput inputHandle = do
-    logInput "Configuring input..."
-    withHandleToHANDLE inputHandle $ \wh -> do
-        original <- getConsoleMode wh
-        let setMode = setConsoleMode wh $ eNABLE_VIRTUAL_TERMINAL_INPUT .|. eNABLE_EXTENDED_FLAGS
-        pure (setMode,
-              setConsoleMode wh original)
-
-logInput :: String -> IO ()
-logInput input = appendFile "C:\\temp\\input.txt" $ input ++ "\n"

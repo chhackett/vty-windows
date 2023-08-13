@@ -251,14 +251,10 @@ foreign import ccall "set_screen_size" cSetScreenSize :: CInt -> CInt -> HANDLE 
 
 setWindowSize :: Handle -> (Int, Int) -> IO ()
 setWindowSize hOut (w, h) = do
-  logOutput $ "Setting new window size to: " ++ show (w, h)
   result <- withHandleToHANDLE hOut $ cSetScreenSize (fromIntegral w) (fromIntegral h)
   if result == 0
       then return ()
       else error $ "Unable to setup window size. Got error code: " ++ show result
-
-logOutput :: String -> IO ()
-logOutput output = appendFile "C:\\temp\\output.txt" $ output ++ "\n"
 
 terminfoDisplayContext :: Output -> TerminfoCaps -> DisplayRegion -> IO DisplayContext
 terminfoDisplayContext tActual terminfoCaps r = return dc
@@ -389,9 +385,9 @@ terminfoWriteSetAttr dc terminfoCaps urlsEnabled prevAttr reqAttr diffs =
     where
         urlAttrs True = writeURLEscapes (urlDiff diffs)
         urlAttrs False = mempty
-        colorMap = case useAltColorMap terminfoCaps of
-                        False -> ansiColorIndex
-                        True -> altColorIndex
+        colorMap = if useAltColorMap terminfoCaps
+                   then altColorIndex
+                   else ansiColorIndex
         attr = fixDisplayAttr prevAttr reqAttr
 
         -- italics can't be set via SGR, so here we manually
