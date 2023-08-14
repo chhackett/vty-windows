@@ -107,7 +107,7 @@ readFromDevice = do
 
     input <- lift ask
     stringRep <- liftIO $ do
-        bytesRead <- readBuf (eventChannel input) winRecordPtr handle bufferPtr maxInputRecords
+        bytesRead <- readBuf (eventChannel input) winRecordPtr handle bufferPtr maxInputRecords (inputLogMsg input)
         if bytesRead > 0
         then BS.packCStringLen (castPtr bufferPtr, fromIntegral bytesRead)
         else return BS.empty
@@ -148,6 +148,7 @@ dropInvalid = do
 
 runInputProcessorLoop :: ClassifyMap -> Input -> Handle -> IO ()
 runInputProcessorLoop classifyTable input handle = do
+    inputLogMsg input $ show classifyTable
     let bufferSize = 1024
     -- A key event could require 4 bytes of UTF-8.
     let maxKeyEvents = bufferSize `div` 4

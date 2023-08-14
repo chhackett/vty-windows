@@ -1,17 +1,11 @@
 module Graphics.Vty.Platform.Windows.Input.Terminfo
   ( classifyMapForTerm
-  , specialSupportKeys
-  , capsClassifyMap
-  , keysFromCapsTable
-  , universalTable
-  , visibleChars
   )
 where
 
 import Graphics.Vty.Input.Events
 import qualified Graphics.Vty.Platform.Windows.Input.Terminfo.ANSIVT as ANSIVT
-import Graphics.Vty.Platform.Windows.WindowsCapabilities
-    ( getStringCapability )
+import Graphics.Vty.Platform.Windows.WindowsCapabilities ( getStringCapability )
 
 import Control.Arrow ( Arrow(first) )
 
@@ -45,35 +39,42 @@ classifyMapForTerm :: ClassifyMap
 classifyMapForTerm =
     concat $ capsClassifyMap keysFromCapsTable
            : universalTable
-           : termSpecificTables
+           : ANSIVT.classifyTable
 
 -- | The key table applicable to all terminals.
 --
 -- Note that some of these entries are probably only applicable to
 -- ANSI/VT100 terminals.
 universalTable :: ClassifyMap
-universalTable = concat [visibleChars, ctrlChars, ctrlMetaChars, specialSupportKeys]
+universalTable = concat
+    [ commonVisibleChars
+    , metaChars
+    , otherVisibleChars
+    , ctrlChars
+    , ctrlMetaChars
+    , specialSupportKeys
+    ]
 
 capsClassifyMap :: [(String,Event)] -> ClassifyMap
 capsClassifyMap table = [(x,y) | (Just x,y) <- map extractCap table]
     where extractCap = first getStringCapability
 
--- | Tables specific to a given terminal that are not derivable from
--- terminfo.
---
--- Note that this adds the ANSI/VT100/VT50 tables regardless of term
--- identifier.
-termSpecificTables :: [ClassifyMap]
-termSpecificTables = ANSIVT.classifyTable
+-- | Visible characters in the ISO-8859-1 and UTF-8 common set up to
+-- but not including those in the range 0xA1 to 0xC1
+commonVisibleChars :: ClassifyMap
+commonVisibleChars =
+    [ ([x], EvKey (KChar x) [])
+    | x <- [' ' .. toEnum 0x7F]
+    ]
 
--- | Visible characters in the ISO-8859-1 and UTF-8 common set.
---
--- We limit to < 0xC1. The UTF8 sequence detector will catch all values
--- 0xC2 and above before this classify table is reached.
-visibleChars :: ClassifyMap
-visibleChars = [ ([x], EvKey (KChar x) [])
-               | x <- [' ' .. toEnum 0xC1]
-               ]
+metaChars :: ClassifyMap
+metaChars = map (\([c], _) -> ('\ESC':[c], EvKey (KChar c) [MMeta])) commonVisibleChars
+
+otherVisibleChars :: ClassifyMap
+otherVisibleChars =
+    [ ([x], EvKey (KChar x) [])
+    | x <- [toEnum 0x8A .. toEnum 0xC1]
+    ]
 
 -- | Non-printable characters in the ISO-8859-1 and UTF-8 common set
 -- translated to ctrl + char.
@@ -89,7 +90,7 @@ ctrlChars =
 
 -- | Ctrl+Meta+Char
 ctrlMetaChars :: ClassifyMap
-ctrlMetaChars = map (\(s,EvKey c m) -> ('\ESC':s, EvKey c (MMeta:m))) ctrlChars
+ctrlMetaChars = map (\(s, EvKey c m) -> ('\ESC':s, EvKey c (MMeta:m))) ctrlChars
 
 -- | Esc, meta-esc, delete, meta-delete, enter, meta-enter.
 specialSupportKeys :: ClassifyMap
@@ -187,8 +188,4 @@ keysFromCapsTable =
     , ("kLFT",  EvKey KLeft      [MShift])
     , ("kRIT",  EvKey KRight     [MShift])
     , ("kcuu1", EvKey KUp        [])
-    ] ++ functionKeyCapsTable
-
--- | Cap names for function keys.
-functionKeyCapsTable :: ClassifyMap
-functionKeyCapsTable = flip map [0..63] $ \n -> ("kf" ++ show n, EvKey (KFun n) [])
+    ] 
