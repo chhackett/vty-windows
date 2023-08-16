@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+
 module Graphics.Vty.Platform.Windows.Output.XTermColor
   ( reserveTerminal
   )
@@ -18,9 +19,9 @@ import Data.ByteString.Char8 (ByteString)
 import Foreign.Ptr (castPtr)
 
 import Control.Monad (void, when)
-import Control.Monad.Trans
+import Control.Monad.Trans ( MonadIO(..) )
 import Data.Char (isPrint, showLitChar)
-import Data.IORef
+import Data.IORef ( newIORef, readIORef, writeIORef )
 
 #if !MIN_VERSION_base(4,11,0)
 import Data.Monoid ((<>))
@@ -42,8 +43,6 @@ reserveTerminal variant outFd colorMode = liftIO $ do
     -- more often than not, xterm-color is broken.
     let variant' = if variant == "xterm-color" then "xterm" else variant
 
-    utf8a <- utf8Active
-    when (not utf8a) $ flushedPut setUtf8CharSet
     t <- TerminfoBased.reserveTerminal variant' outFd colorMode
 
     mouseModeStatus <- newIORef False
@@ -73,7 +72,6 @@ reserveTerminal variant outFd colorMode = liftIO $ do
     let t' = t
              { terminalID = terminalID t ++ " (xterm-color)"
              , releaseTerminal = do
-                 when (not utf8a) $ liftIO $ flushedPut setDefaultCharSet
                  setMode t' BracketedPaste False
                  setMode t' Mouse False
                  setMode t' Focus False
@@ -88,9 +86,6 @@ reserveTerminal variant outFd colorMode = liftIO $ do
              }
     return t'
 
-utf8Active :: IO Bool
-utf8Active = return True
-
 -- | Enable bracketed paste mode:
 -- http://cirw.in/blog/bracketed-paste
 enableBracketedPastes :: ByteString
@@ -103,9 +98,9 @@ disableBracketedPastes = BS8.pack "\ESC[?2004l"
 -- | These sequences set xterm based terminals to UTF-8 output.
 --
 -- There is no known terminfo capability equivalent to this.
-setUtf8CharSet, setDefaultCharSet :: ByteString
-setUtf8CharSet = BS8.pack "\ESC%G"
-setDefaultCharSet = BS8.pack "\ESC%@"
+-- setUtf8CharSet, setDefaultCharSet :: ByteString
+-- setUtf8CharSet = BS8.pack "\ESC%G"
+-- setDefaultCharSet = BS8.pack "\ESC%@"
 
 xtermInlineHack :: Output -> IO ()
 xtermInlineHack t = do

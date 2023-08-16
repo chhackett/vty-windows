@@ -148,7 +148,6 @@ dropInvalid = do
 
 runInputProcessorLoop :: ClassifyMap -> Input -> Handle -> IO ()
 runInputProcessorLoop classifyTable input handle = do
-    inputLogMsg input $ show classifyTable
     let bufferSize = 1024
     -- A key event could require 4 bytes of UTF-8.
     let maxKeyEvents = bufferSize `div` 4

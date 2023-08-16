@@ -44,8 +44,7 @@ readBuf' eventChannel inputEventPtr handle bufferPtr maxInputRecords logDebug = 
         handleInputEvent :: (Int, Maybe Int) -> WinConsoleInputEvent -> IO (Int, Maybe Int)
         handleInputEvent (offset, mSurrogateVal) inputEvent = do
             case inputEvent of
-                KeyEventRecordU keyEvent@(KeyEventRecordC isKeyDown _ vKeyCode _ cwChar _) -> do
-                    logDebug $ show keyEvent
+                KeyEventRecordU (KeyEventRecordC isKeyDown _ _ _ cwChar _) -> do
                     -- Process the character if this is a 'key down' event,
                     -- AND the char is not NULL
                     if isKeyDown && cwChar /= 0
@@ -55,29 +54,29 @@ readBuf' eventChannel inputEventPtr handle bufferPtr maxInputRecords logDebug = 
                     let resize = EvResize (fromIntegral x) (fromIntegral y)
                     atomically $ writeTChan eventChannel (InputEvent resize)
                     return (offset, Nothing)
-                -- Drop focus events for now, since we should receive equivalent virtual
-                -- terminal sequences when focus mode is enabled.
-                FocusEventRecordU (FocusEventRecordC _) -> return (offset, Nothing)
                 _ -> return (offset, Nothing)
 
         processCWChar :: (Int, Maybe Int) -> Int -> IO (Int, Maybe Int)
         processCWChar (offset, Nothing) charVal = do
             if isSurrogate charVal
             then return (offset, Just charVal)
-            else do
-                let utf8Char = encodeChar $ toEnum charVal
-                writeToBuffer utf8Char offset
-                return (offset + length utf8Char, Nothing)
+            else encodeAndWriteToBuf offset charVal
+            where
+                isSurrogate :: Int -> Bool
+                isSurrogate c = 0xD800 <= c && c < 0xDC00
         processCWChar (offset, Just surogateVal) charVal = do
-            let utf8Char = encodeChar $ toEnum $ (((surogateVal .&. 0x3FF) `shiftL` 10) .|. (charVal .&. 0x3FF)) + 0x10000
+            let utf8Char = toEnum $ (((surogateVal .&. 0x3FF) `shiftL` 10) .|. (charVal .&. 0x3FF)) + 0x10000
+            encodeAndWriteToBuf offset utf8Char
+
+        encodeAndWriteToBuf :: Int -> Int -> IO (Int, Maybe Int)
+        encodeAndWriteToBuf offset charVal = do
+            let utf8Char = encodeChar $ toEnum charVal
             writeToBuffer utf8Char offset
             return (offset + length utf8Char, Nothing)
 
         writeToBuffer :: [Word8] -> Int -> IO ()
         writeToBuffer cs offset = mapM_ (\(w, offset') -> pokeElemOff bufferPtr (offset + offset') w) $ zip cs [0..]
 
-        isSurrogate :: Int -> Bool
-        isSurrogate charVal = 0xD800 <= charVal && charVal < 0xDC00
 
 
 -- Configure Windows to correctly handle input/output in virtual terminal mode

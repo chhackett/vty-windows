@@ -37,8 +37,7 @@ import Control.Arrow ( Arrow(first) )
 -- Precedence is currently implicit in the 'compile' algorithm.
 classifyMapForTerm :: ClassifyMap
 classifyMapForTerm =
-    concat $ capsClassifyMap keysFromCapsTable
-           : universalTable
+    concat $ universalTable
            : ANSIVT.classifyTable
 
 -- | The key table applicable to all terminals.
@@ -54,10 +53,6 @@ universalTable = concat
     , ctrlMetaChars
     , specialSupportKeys
     ]
-
-capsClassifyMap :: [(String,Event)] -> ClassifyMap
-capsClassifyMap table = [(x,y) | (Just x,y) <- map extractCap table]
-    where extractCap = first getStringCapability
 
 -- | Visible characters in the ISO-8859-1 and UTF-8 common set up to
 -- but not including those in the range 0xA1 to 0xC1
@@ -82,7 +77,7 @@ otherVisibleChars =
 -- This treats CTRL-i the same as tab.
 ctrlChars :: ClassifyMap
 ctrlChars =
-    [ ([toEnum x],EvKey (KChar y) [MCtrl])
+    [ ([toEnum x], EvKey (KChar y) [MCtrl])
     | (x,y) <- zip [0..31] ('@':['a'..'z']++['['..'_'])
     , y /= 'i'  -- Resolve issue #3 where CTRL-i hides TAB.
     , y /= 'h'  -- CTRL-h should not hide BS
@@ -102,90 +97,9 @@ specialSupportKeys =
     -- Special support for backspace
     , ("\DEL",EvKey KBS []), ("\ESC\DEL",EvKey KBS [MMeta]), ("\b",EvKey KBS [])
     -- Special support for Enter
-    , ("\ESC\^J",EvKey KEnter [MMeta]), ("\^J",EvKey KEnter [])
+    , ("\ESC\^J",EvKey KEnter [MMeta]), ("\r",EvKey KEnter [])
     -- explicit support for tab
     , ("\t", EvKey (KChar '\t') [])
+    , ("\SUB", EvKey KPause [])
+    , ("\ESC[Z", EvKey KBackTab [])
     ]
-
--- | A classification table directly generated from terminfo cap
--- strings.  These are:
---
--- * ka1 - keypad up-left
---
--- * ka3 - keypad up-right
---
--- * kb2 - keypad center
---
--- * kbs - keypad backspace
---
--- * kbeg - begin
---
--- * kcbt - back tab
---
--- * kc1 - keypad left-down
---
--- * kc3 - keypad right-down
---
--- * kdch1 - delete
---
--- * kcud1 - down
---
--- * kend - end
---
--- * kent - enter
---
--- * kf0 - kf63 - function keys
---
--- * khome - KHome
---
--- * kich1 - insert
---
--- * kcub1 - left
---
--- * knp - next page (page down)
---
--- * kpp - previous page (page up)
---
--- * kcuf1 - right
---
--- * kDC - shift delete
---
--- * kEND - shift end
---
--- * kHOM - shift home
---
--- * kIC - shift insert
---
--- * kLFT - shift left
---
--- * kRIT - shift right
---
--- * kcuu1 - up
-keysFromCapsTable :: ClassifyMap
-keysFromCapsTable =
-    [ ("ka1",   EvKey KUpLeft    [])
-    , ("ka3",   EvKey KUpRight   [])
-    , ("kb2",   EvKey KCenter    [])
-    , ("kbs",   EvKey KBS        [])
-    , ("kbeg",  EvKey KBegin     [])
-    , ("kcbt",  EvKey KBackTab   [])
-    , ("kc1",   EvKey KDownLeft  [])
-    , ("kc3",   EvKey KDownRight [])
-    , ("kdch1", EvKey KDel       [])
-    , ("kcud1", EvKey KDown      [])
-    , ("kend",  EvKey KEnd       [])
-    , ("kent",  EvKey KEnter     [])
-    , ("khome", EvKey KHome      [])
-    , ("kich1", EvKey KIns       [])
-    , ("kcub1", EvKey KLeft      [])
-    , ("knp",   EvKey KPageDown  [])
-    , ("kpp",   EvKey KPageUp    [])
-    , ("kcuf1", EvKey KRight     [])
-    , ("kDC",   EvKey KDel       [MShift])
-    , ("kEND",  EvKey KEnd       [MShift])
-    , ("kHOM",  EvKey KHome      [MShift])
-    , ("kIC",   EvKey KIns       [MShift])
-    , ("kLFT",  EvKey KLeft      [MShift])
-    , ("kRIT",  EvKey KRight     [MShift])
-    , ("kcuu1", EvKey KUp        [])
-    ] 
