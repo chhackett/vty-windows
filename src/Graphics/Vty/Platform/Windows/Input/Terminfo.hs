@@ -5,9 +5,6 @@ where
 
 import Graphics.Vty.Input.Events
 import qualified Graphics.Vty.Platform.Windows.Input.Terminfo.ANSIVT as ANSIVT
-import Graphics.Vty.Platform.Windows.WindowsCapabilities ( getStringCapability )
-
-import Control.Arrow ( Arrow(first) )
 
 -- | Queries the terminal for all capability-based input sequences and
 -- then adds on a terminal-dependent input sequence mapping.
@@ -87,19 +84,15 @@ ctrlChars =
 ctrlMetaChars :: ClassifyMap
 ctrlMetaChars = map (\(s, EvKey c m) -> ('\ESC':s, EvKey c (MMeta:m))) ctrlChars
 
--- | Esc, meta-esc, delete, meta-delete, enter, meta-enter.
+-- | Escape, backspace, enter, tab.
 specialSupportKeys :: ClassifyMap
 specialSupportKeys =
-    [ ("\ESC\ESC[5~",EvKey KPageUp [MMeta])
-    , ("\ESC\ESC[6~",EvKey KPageDown [MMeta])
     -- special support for ESC
-    , ("\ESC",EvKey KEsc []), ("\ESC\ESC",EvKey KEsc [MMeta])
+    [ ("\ESC",EvKey KEsc []), ("\ESC\ESC",EvKey KEsc [MMeta])
     -- Special support for backspace
-    , ("\DEL",EvKey KBS []), ("\ESC\DEL",EvKey KBS [MMeta]), ("\b",EvKey KBS [])
+    , ("\DEL", EvKey KBS []), ("\ESC\DEL", EvKey KBS [MMeta]), ("\b", EvKey KBS [MCtrl])
     -- Special support for Enter
-    , ("\ESC\^J",EvKey KEnter [MMeta]), ("\r",EvKey KEnter [])
+    , ("\r",EvKey KEnter []), ("\ESC\^J",EvKey KEnter [MMeta]), ("\n", EvKey KEnter [MCtrl])
     -- explicit support for tab
-    , ("\t", EvKey (KChar '\t') [])
-    , ("\SUB", EvKey KPause [])
-    , ("\ESC[Z", EvKey KBackTab [])
+    , ("\t", EvKey (KChar '\t') []), ("\ESC[Z", EvKey (KChar '\t') [MShift])
     ]

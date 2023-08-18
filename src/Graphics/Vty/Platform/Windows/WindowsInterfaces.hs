@@ -23,8 +23,7 @@ import System.IO ( Handle )
 import System.Win32.Types ( HANDLE, withHandleToHANDLE, DWORD )
 import System.Win32.Console
 
-foreign import ccall "windows.h WaitForSingleObject" c_WaitForSingleObject
-    :: HANDLE -> DWORD -> IO DWORD
+foreign import ccall "windows.h WaitForSingleObject" c_WaitForSingleObject :: HANDLE -> DWORD -> IO DWORD
 
 readBuf :: TChan InternalEvent -> Ptr WinConsoleInputEvent -> Handle -> Ptr Word8 -> Int -> (String -> IO ()) -> IO Int
 readBuf eventChannel inputEventPtr handle bufferPtr maxInputRecords logDebug = do
@@ -44,7 +43,8 @@ readBuf' eventChannel inputEventPtr handle bufferPtr maxInputRecords logDebug = 
         handleInputEvent :: (Int, Maybe Int) -> WinConsoleInputEvent -> IO (Int, Maybe Int)
         handleInputEvent (offset, mSurrogateVal) inputEvent = do
             case inputEvent of
-                KeyEventRecordU (KeyEventRecordC isKeyDown _ _ _ cwChar _) -> do
+                KeyEventRecordU keyEvent@(KeyEventRecordC isKeyDown _ _ _ cwChar _) -> do
+                    -- logDebug $ show keyEvent
                     -- Process the character if this is a 'key down' event,
                     -- AND the char is not NULL
                     if isKeyDown && cwChar /= 0
@@ -65,18 +65,14 @@ readBuf' eventChannel inputEventPtr handle bufferPtr maxInputRecords logDebug = 
                 isSurrogate :: Int -> Bool
                 isSurrogate c = 0xD800 <= c && c < 0xDC00
         processCWChar (offset, Just surogateVal) charVal = do
-            let utf8Char = toEnum $ (((surogateVal .&. 0x3FF) `shiftL` 10) .|. (charVal .&. 0x3FF)) + 0x10000
-            encodeAndWriteToBuf offset utf8Char
+            let charVal' = (((surogateVal .&. 0x3FF) `shiftL` 10) .|. (charVal .&. 0x3FF)) + 0x10000
+            encodeAndWriteToBuf offset charVal'
 
         encodeAndWriteToBuf :: Int -> Int -> IO (Int, Maybe Int)
         encodeAndWriteToBuf offset charVal = do
             let utf8Char = encodeChar $ toEnum charVal
-            writeToBuffer utf8Char offset
+            mapM_ (\(w, offset') -> pokeElemOff bufferPtr (offset + offset') w) $ zip utf8Char [0..]
             return (offset + length utf8Char, Nothing)
-
-        writeToBuffer :: [Word8] -> Int -> IO ()
-        writeToBuffer cs offset = mapM_ (\(w, offset') -> pokeElemOff bufferPtr (offset + offset') w) $ zip cs [0..]
-
 
 
 -- Configure Windows to correctly handle input/output in virtual terminal mode
