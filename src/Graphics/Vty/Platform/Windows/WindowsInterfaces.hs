@@ -23,20 +23,19 @@ import System.IO ( Handle )
 import System.Win32.Types ( HANDLE, withHandleToHANDLE, DWORD )
 import System.Win32.Console
 
-foreign import ccall "windows.h WaitForSingleObject" c_WaitForSingleObject
-    :: HANDLE -> DWORD -> IO DWORD
+foreign import ccall "windows.h WaitForSingleObject" c_WaitForSingleObject :: HANDLE -> DWORD -> IO DWORD
 
-readBuf :: TChan InternalEvent -> Ptr WinConsoleInputEvent -> Handle -> Ptr Word8 -> Int -> IO Int
-readBuf eventChannel inputEventPtr handle bufferPtr maxInputRecords = do
+readBuf :: TChan InternalEvent -> Ptr WinConsoleInputEvent -> Handle -> Ptr Word8 -> Int -> (String -> IO ()) -> IO Int
+readBuf eventChannel inputEventPtr handle bufferPtr maxInputRecords logDebug = do
     ret <- withHandleToHANDLE handle (`c_WaitForSingleObject` 500)
     yield -- otherwise, the above foreign call causes the loop to never
           -- respond to the killThread
     if ret /= 0
-    then readBuf eventChannel inputEventPtr handle bufferPtr maxInputRecords
-    else readBuf' eventChannel inputEventPtr handle bufferPtr maxInputRecords
+    then readBuf eventChannel inputEventPtr handle bufferPtr maxInputRecords logDebug
+    else readBuf' eventChannel inputEventPtr handle bufferPtr maxInputRecords logDebug
 
-readBuf' :: TChan InternalEvent -> Ptr WinConsoleInputEvent -> Handle -> Ptr Word8 -> Int -> IO Int
-readBuf' eventChannel inputEventPtr handle bufferPtr maxInputRecords = do
+readBuf' :: TChan InternalEvent -> Ptr WinConsoleInputEvent -> Handle -> Ptr Word8 -> Int -> (String -> IO ()) -> IO Int
+readBuf' eventChannel inputEventPtr handle bufferPtr maxInputRecords logDebug = do
     inputEvents <- readConsoleInput inputEventPtr maxInputRecords handle
     (offset, _) <- foldM handleInputEvent (0, Nothing) inputEvents
     return offset
@@ -44,37 +43,36 @@ readBuf' eventChannel inputEventPtr handle bufferPtr maxInputRecords = do
         handleInputEvent :: (Int, Maybe Int) -> WinConsoleInputEvent -> IO (Int, Maybe Int)
         handleInputEvent (offset, mSurrogateVal) inputEvent = do
             case inputEvent of
-                KeyEventRecordU (KeyEventRecordC isKeyDown _ _ _ cwChar _) -> do
-                    if isKeyDown
+                KeyEventRecordU keyEvent@(KeyEventRecordC isKeyDown _ _ _ cwChar _) -> do
+                    -- logDebug $ show keyEvent
+                    -- Process the character if this is a 'key down' event,
+                    -- AND the char is not NULL
+                    if isKeyDown && cwChar /= 0
                     then processCWChar (offset, mSurrogateVal) $ fromEnum cwChar
                     else return (offset, Nothing)
                 WindowBufferSizeRecordU (WindowBufferSizeRecordC (COORD x y)) -> do
                     let resize = EvResize (fromIntegral x) (fromIntegral y)
                     atomically $ writeTChan eventChannel (InputEvent resize)
                     return (offset, Nothing)
-                -- Drop focus events for now, since we should receive equivalent virtual
-                -- terminal sequences when focus mode is enabled.
-                FocusEventRecordU (FocusEventRecordC _) -> return (offset, Nothing)
                 _ -> return (offset, Nothing)
 
         processCWChar :: (Int, Maybe Int) -> Int -> IO (Int, Maybe Int)
         processCWChar (offset, Nothing) charVal = do
             if isSurrogate charVal
             then return (offset, Just charVal)
-            else do
-                let utf8Char = encodeChar $ toEnum charVal
-                writeToBuffer utf8Char offset
-                return (offset + length utf8Char, Nothing)
+            else encodeAndWriteToBuf offset charVal
+            where
+                isSurrogate :: Int -> Bool
+                isSurrogate c = 0xD800 <= c && c < 0xDC00
         processCWChar (offset, Just surogateVal) charVal = do
-            let utf8Char = encodeChar $ toEnum $ (((surogateVal .&. 0x3FF) `shiftL` 10) .|. (charVal .&. 0x3FF)) + 0x10000
-            writeToBuffer utf8Char offset
+            let charVal' = (((surogateVal .&. 0x3FF) `shiftL` 10) .|. (charVal .&. 0x3FF)) + 0x10000
+            encodeAndWriteToBuf offset charVal'
+
+        encodeAndWriteToBuf :: Int -> Int -> IO (Int, Maybe Int)
+        encodeAndWriteToBuf offset charVal = do
+            let utf8Char = encodeChar $ toEnum charVal
+            mapM_ (\(w, offset') -> pokeElemOff bufferPtr (offset + offset') w) $ zip utf8Char [0..]
             return (offset + length utf8Char, Nothing)
-
-        writeToBuffer :: [Word8] -> Int -> IO ()
-        writeToBuffer cs offset = mapM_ (\(w, offset') -> pokeElemOff bufferPtr (offset + offset') w) $ zip cs [0..]
-
-        isSurrogate :: Int -> Bool
-        isSurrogate charVal = 0xD800 <= charVal && charVal < 0xDC00
 
 
 -- Configure Windows to correctly handle input/output in virtual terminal mode

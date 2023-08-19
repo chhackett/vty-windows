@@ -38,8 +38,9 @@ compile table = cl' where
             -- if the inputBlock is exactly what is expected for an
             -- event then consume the whole block and return the event
             Just e -> Valid e BS8.empty
-            Nothing -> case S.member inputBlock prefixSet of
-                True -> Prefix
+            Nothing ->
+                if S.member inputBlock prefixSet
+                then Prefix
                 -- look up progressively smaller tails of the input
                 -- block until an event is found The assumption is that
                 -- the event that consumes the most input bytes should
@@ -47,7 +48,7 @@ compile table = cl' where
                 -- The test verifyFullSynInputToEvent2x verifies this.
                 -- H: There will always be one match. The prefixSet
                 -- contains, by definition, all prefixes of an event.
-                False ->
+                else
                     let inputPrefixes = reverse . take maxValidInputLength . tail . BS8.inits $ inputBlock
                     in case mapMaybe (\s -> (,) s `fmap` M.lookup s eventForInput) inputPrefixes of
                         (s,e) : _ -> Valid e (BS8.drop (BS8.length s) inputBlock)

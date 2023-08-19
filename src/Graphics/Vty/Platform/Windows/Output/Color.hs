@@ -24,6 +24,7 @@ detectColorMode :: String -> IO ColorMode
 detectColorMode termType =
   case termType of
     "xterm-256color" -> return $ ColorMode240 255
+    "xterm"           -> return $ ColorMode240 255
     _                -> throwIO $ VtyUnsupportedTermType termType
 
 defaultColorMode :: IO ColorMode

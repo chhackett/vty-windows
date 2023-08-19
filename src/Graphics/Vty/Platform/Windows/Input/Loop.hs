@@ -107,7 +107,7 @@ readFromDevice = do
 
     input <- lift ask
     stringRep <- liftIO $ do
-        bytesRead <- readBuf (eventChannel input) winRecordPtr handle bufferPtr maxInputRecords
+        bytesRead <- readBuf (eventChannel input) winRecordPtr handle bufferPtr maxInputRecords (inputLogMsg input)
         if bytesRead > 0
         then BS.packCStringLen (castPtr bufferPtr, fromIntegral bytesRead)
         else return BS.empty
