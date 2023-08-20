@@ -11,7 +11,7 @@ git clone git://github.com/chhackett/vty-windows.git
 Install via `cabal` with:
 
 ```
-cabal install vty
+cabal install vty-windows
 ```
 
 # Features

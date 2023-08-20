@@ -1,46 +1,21 @@
 module Graphics.Vty.Platform.Windows.Input.Terminfo
   ( classifyMapForTerm
+  , universalTable
+  , commonVisibleChars
+  , specialSupportKeys
   )
 where
 
 import Graphics.Vty.Input.Events
 import qualified Graphics.Vty.Platform.Windows.Input.Terminfo.ANSIVT as ANSIVT
 
--- | Queries the terminal for all capability-based input sequences and
--- then adds on a terminal-dependent input sequence mapping.
---
--- For reference see:
---
--- * http://vimdoc.sourceforge.net/htmldoc/term.html
---
--- * vim74/src/term.c
---
--- * http://invisible-island.net/vttest/
---
--- * http://aperiodic.net/phil/archives/Geekery/term-function-keys.html
---
--- Terminfo is incomplete. The vim source implies that terminfo is also
--- incorrect. Vty assumes that the internal terminfo table added to the
--- system-provided terminfo table is correct.
---
--- The procedure used here is:
---
--- 1. Build terminfo table for all caps. Missing caps are not added.
---
--- 2. Add tables for visible chars, esc, del, ctrl, and meta.
---
--- 3. Add internally-defined table for given terminal type.
---
--- Precedence is currently implicit in the 'compile' algorithm.
+-- | Builds input sequences for all VT sequences available on Windows
 classifyMapForTerm :: ClassifyMap
 classifyMapForTerm =
     concat $ universalTable
            : ANSIVT.classifyTable
 
--- | The key table applicable to all terminals.
---
--- Note that some of these entries are probably only applicable to
--- ANSI/VT100 terminals.
+-- | Combined tables.
 universalTable :: ClassifyMap
 universalTable = concat
     [ commonVisibleChars
