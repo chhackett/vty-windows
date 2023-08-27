@@ -23,9 +23,9 @@ instance Exception VtyConfigurationError where
 detectColorMode :: String -> IO ColorMode
 detectColorMode termType =
   case termType of
-    "xterm-256color" -> return $ ColorMode240 255
-    "xterm"           -> return $ ColorMode240 255
+    "xterm-256color" -> return FullColor
+    "xterm"           -> return FullColor
     _                -> throwIO $ VtyUnsupportedTermType termType
 
 defaultColorMode :: IO ColorMode
-defaultColorMode = return $ ColorMode240 255
+defaultColorMode = return FullColor
