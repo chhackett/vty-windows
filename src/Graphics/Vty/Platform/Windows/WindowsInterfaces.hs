@@ -87,5 +87,6 @@ configureOutput :: Handle -> IO (IO ())
 configureOutput outputHandle = do
     withHandleToHANDLE outputHandle $ \wh -> do
         original <- getConsoleMode wh
+        setConsoleOutputCP 65001
         setConsoleMode wh $ eNABLE_VIRTUAL_TERMINAL_PROCESSING .|. eNABLE_PROCESSED_OUTPUT
         pure (setConsoleMode wh original)
