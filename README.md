@@ -44,6 +44,15 @@ cabal install vty-windows
   functionality to build a width table that will work for your terminal
   and load it on application startup.
 
+# Platform Support
+
+**Important Note**
+Developers that want to develop cross platform applications using the vty
+library should directly depend on [vty-crossplatform](https://github.com/jtdaugherty/vty-crossplatform), and not this library.
+
+If you wish to only target the Windows platform, then using vty-windows would
+be the correct approach.
+
 # Contributing
 
 If you decide to contribute, that's great! Here are some guidelines you
