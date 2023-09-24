@@ -25,17 +25,17 @@ import System.Win32.Console
 
 foreign import ccall "windows.h WaitForSingleObject" c_WaitForSingleObject :: HANDLE -> DWORD -> IO DWORD
 
-readBuf :: TChan InternalEvent -> Ptr WinConsoleInputEvent -> Handle -> Ptr Word8 -> Int -> (String -> IO ()) -> IO Int
-readBuf eventChannel inputEventPtr handle bufferPtr maxInputRecords logDebug = do
+readBuf :: TChan InternalEvent -> Ptr WinConsoleInputEvent -> Handle -> Ptr Word8 -> Int -> IO Int
+readBuf eventChannel inputEventPtr handle bufferPtr maxInputRecords = do
     ret <- withHandleToHANDLE handle (`c_WaitForSingleObject` 500)
     yield -- otherwise, the above foreign call causes the loop to never
           -- respond to the killThread
     if ret /= 0
-    then readBuf eventChannel inputEventPtr handle bufferPtr maxInputRecords logDebug
-    else readBuf' eventChannel inputEventPtr handle bufferPtr maxInputRecords logDebug
+    then readBuf eventChannel inputEventPtr handle bufferPtr maxInputRecords
+    else readBuf' eventChannel inputEventPtr handle bufferPtr maxInputRecords
 
-readBuf' :: TChan InternalEvent -> Ptr WinConsoleInputEvent -> Handle -> Ptr Word8 -> Int -> (String -> IO ()) -> IO Int
-readBuf' eventChannel inputEventPtr handle bufferPtr maxInputRecords logDebug = do
+readBuf' :: TChan InternalEvent -> Ptr WinConsoleInputEvent -> Handle -> Ptr Word8 -> Int -> IO Int
+readBuf' eventChannel inputEventPtr handle bufferPtr maxInputRecords = do
     inputEvents <- readConsoleInput inputEventPtr maxInputRecords handle
     (offset, _) <- foldM handleInputEvent (0, Nothing) inputEvents
     return offset
@@ -43,8 +43,7 @@ readBuf' eventChannel inputEventPtr handle bufferPtr maxInputRecords logDebug = 
         handleInputEvent :: (Int, Maybe Int) -> WinConsoleInputEvent -> IO (Int, Maybe Int)
         handleInputEvent (offset, mSurrogateVal) inputEvent = do
             case inputEvent of
-                KeyEventRecordU keyEvent@(KeyEventRecordC isKeyDown _ _ _ cwChar _) -> do
-                    -- logDebug $ show keyEvent
+                KeyEventRecordU (KeyEventRecordC isKeyDown _ _ _ cwChar _) -> do
                     -- Process the character if this is a 'key down' event,
                     -- AND the char is not NULL
                     if isKeyDown && cwChar /= 0

@@ -25,14 +25,10 @@ smokeTestTermNonMac i = liftIOResult $ do
 
 smokeTestTerm :: Image -> IO Result
 smokeTestTerm i = do
-    -- nullOut <- openHandleToNull
-    -- testHandle <- openFile "C:\\temp\\verifyOutput.txt" WriteMode
     s <- defaultSettings
     t <- buildOutput $ s
-            { --settingOutputFd = stdout
-              settingColorMode = NoColor
+            { settingColorMode = NoColor
             }
-    -- putStrLn $ "context color count: " ++ show (contextColorCount t)
     reserveDisplay t
     dc <- displayContext t (100,100)
     -- always show the cursor to produce tests for terminals with no

@@ -44,7 +44,7 @@ library
     build-depends:     semigroups >= 0.16,
                        fail
 
-test-suite verify-terminal
+test-suite verify-output
   default-language:    Haskell2010
   type:                detailed-0.9
   hs-source-dirs:      programs
