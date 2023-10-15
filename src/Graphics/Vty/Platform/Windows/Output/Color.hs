@@ -6,7 +6,7 @@ module Graphics.Vty.Platform.Windows.Output.Color
   )
 where
 
-import Control.Exception (Exception(..), throwIO)
+import Control.Exception (Exception(..))
 import Data.Typeable (Typeable)
 import Graphics.Vty.Attributes.Color ( ColorMode(..) )
 
@@ -24,8 +24,8 @@ detectColorMode :: String -> IO ColorMode
 detectColorMode termType =
   case termType of
     "xterm-256color" -> return FullColor
-    "xterm"           -> return FullColor
-    _                -> throwIO $ VtyUnsupportedTermType termType
+    "xterm"          -> return FullColor
+    _                -> return FullColor
 
 defaultColorMode :: IO ColorMode
 defaultColorMode = return FullColor

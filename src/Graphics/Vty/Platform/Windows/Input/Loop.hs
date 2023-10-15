@@ -51,7 +51,6 @@ import System.IO ( Handle )
 
 data InputBuffer = InputBuffer
     { _ptr :: Ptr Word8
-    , _size :: Int
     , _inputRecordPtr :: Ptr WinConsoleInputEvent
     , _consoleEventBufferSize :: Int
     }
@@ -156,7 +155,7 @@ runInputProcessorLoop classifyTable input handle = do
             let s0 = InputState BS8.empty ClassifierStart
                         handle
                         input
-                        (InputBuffer bufferPtr bufferSize inputRecordBuf maxKeyEvents)
+                        (InputBuffer bufferPtr inputRecordBuf maxKeyEvents)
                         (classify classifyTable)
             runReaderT (evalStateT loopInputProcessor s0) input
 

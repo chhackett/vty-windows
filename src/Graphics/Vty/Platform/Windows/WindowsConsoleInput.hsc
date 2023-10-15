@@ -66,7 +66,7 @@ readConsoleInput' :: Ptr WinConsoleInputEvent -> Int -> HANDLE -> IO [WinConsole
 readConsoleInput' inputRecordPtr maxEvents handle' =
     alloca $ \numEventsReadPtr -> do
         poke numEventsReadPtr 1
-        success <- cReadConsoleInput handle' inputRecordPtr (fromIntegral maxEvents) numEventsReadPtr
+        _ <- cReadConsoleInput handle' inputRecordPtr (fromIntegral maxEvents) numEventsReadPtr
         numEvents <- peek numEventsReadPtr
         foldM addNextRecord [] [(fromIntegral numEvents - 1), (fromIntegral numEvents - 2)..0]
     where

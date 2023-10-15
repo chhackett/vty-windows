@@ -10,7 +10,7 @@ import Verify.Graphics.Vty.Image
 import Verify.Graphics.Vty.Output
 
 import Control.Monad
-import System.IO (IOMode(..), hPutBufNonBlocking, openFile, hClose, stdout)
+import System.IO (IOMode(..), hPutBufNonBlocking, openFile, hClose)
 
 tests :: IO [Test]
 tests = do
@@ -43,6 +43,3 @@ smokeTestTerm i = do
     releaseTerminal t
     -- hClose testHandle
     return succeeded
-
-
-openHandleToNull = openFile "\\\\.\\NUL" WriteMode
