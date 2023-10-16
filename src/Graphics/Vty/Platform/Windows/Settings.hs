@@ -1,3 +1,5 @@
+-- | This module provides data type to describe runtime terminal settings,
+-- and a function to obtain default values for those settings.
 module Graphics.Vty.Platform.Windows.Settings
   ( WindowsSettings(..)
   , defaultSettings
@@ -8,9 +10,7 @@ import Data.Maybe ( fromMaybe )
 import Graphics.Vty.Attributes.Color ( ColorMode(..) )
 import Graphics.Vty.Platform.Windows.Output.Color ( detectColorMode, defaultColorMode )
 import System.Environment ( lookupEnv )
-import System.IO ( Handle, stdin )
-import Graphics.Win32.Misc ( getStdHandle, sTD_OUTPUT_HANDLE )
-import System.Win32.Types
+import System.IO ( Handle, stdin, stdout )
 
 -- | Runtime library settings for interacting with Windows terminals.
 data WindowsSettings = WindowsSettings
@@ -26,20 +26,19 @@ data WindowsSettings = WindowsSettings
   }
   deriving (Show, Eq)
 
-
+-- | Description of reasonable default settings for a Windows environment
 defaultSettings :: IO WindowsSettings
 defaultSettings = do
     mb <- lookupEnv termVariable
     let termName = fromMaybe "xterm-256color" mb
     colorMode <- maybe defaultColorMode detectColorMode mb
-    winStdOut <- getStdHandle sTD_OUTPUT_HANDLE
-    hHandle <- hANDLEToHandle winStdOut
 
     return $ WindowsSettings { settingInputFd  = stdin
-                             , settingOutputFd  = hHandle
+                             , settingOutputFd  = stdout
                              , settingTermName  = termName
                              , settingColorMode = colorMode
                              }
 
+-- | The TERM environment variable
 termVariable :: String
 termVariable = "TERM"

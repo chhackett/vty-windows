@@ -1,15 +1,15 @@
+{-# LANGUAGE StrictData #-}
+
 -- | This module exports the input classification type to avoid import
 -- cycles between other modules that need this.
-{-# LANGUAGE StrictData #-}
 module Graphics.Vty.Platform.Windows.Input.Classify.Types
   ( KClass(..)
   , ClassifierState(..)
   )
 where
 
-import Graphics.Vty.Input.Events
-
 import Data.ByteString.Char8 (ByteString)
+import Graphics.Vty.Input.Events ( Event )
 
 -- | Whether the classifier is currently processing a chunked format.
 -- Currently, only bracketed pastes use this.
@@ -22,6 +22,8 @@ data ClassifierState
     -- the second argument. At the end of the processing, the chunks are
     -- reversed and concatenated with the final chunk.
 
+-- | Description of parsed input sequences, including state for valid key,
+-- mouse, and window events plus invalid and partial events.
 data KClass
     = Valid Event ByteString
     -- ^ A valid event was parsed. Any unused characters from the input

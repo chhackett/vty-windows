@@ -10,15 +10,18 @@ module Graphics.Vty.Platform.Windows.Input.Classify.Parse
   )
 where
 
-import Graphics.Vty.Input.Events
-import Graphics.Vty.Platform.Windows.Input.Classify.Types
-
-import Control.Monad.Trans.Maybe
+import Control.Monad (unless)
+import Control.Monad.Trans.Maybe ( MaybeT(runMaybeT) )
 import Control.Monad.State
+    ( MonadState(put, get), State, runState )
 
 import qualified Data.ByteString.Char8 as BS8
 import Data.ByteString.Char8 (ByteString)
+import Graphics.Vty.Input.Events ( Event )
+import Graphics.Vty.Platform.Windows.Input.Classify.Types
+    ( KClass(Valid, Invalid) )
 
+-- | Represents current state of parsing input data
 type Parser a = MaybeT (State ByteString) a
 
 -- | Run a parser on a given input string. If the parser fails, return
@@ -58,4 +61,4 @@ readChar = do
 expectChar :: Char -> Parser ()
 expectChar c = do
     c' <- readChar
-    if c' == c then return () else failParse
+    unless (c' == c) failParse

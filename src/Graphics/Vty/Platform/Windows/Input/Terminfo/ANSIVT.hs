@@ -7,6 +7,7 @@ where
 
 import Graphics.Vty.Input.Events
 
+-- | Encoding for all special keys
 classifyTable :: [ClassifyMap]
 classifyTable =
     [ cursorKeysMap

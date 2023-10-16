@@ -1,5 +1,6 @@
 {-# LANGUAGE ForeignFunctionInterface, CPP #-}
 
+-- | This module provides a function to obtain input events from the Win32 API
 module Graphics.Vty.Platform.Windows.WindowsConsoleInput
     (KeyEventRecord(..),
      MouseEventRecord(..),
@@ -23,6 +24,8 @@ import System.IO (Handle)
 
 foreign import ccall unsafe "windows.h ReadConsoleInputW" cReadConsoleInput :: HANDLE -> Ptr WinConsoleInputEvent -> DWORD -> LPDWORD -> IO BOOL
 
+-- | This type represents a keyboard input event. The structure is documented here:
+-- https://learn.microsoft.com/en-us/windows/console/key-event-record-str
 data KeyEventRecord = KeyEventRecordC
   { keyDown :: BOOL
   , repeatCount :: WORD
@@ -32,6 +35,8 @@ data KeyEventRecord = KeyEventRecordC
   , controlKeyStateK :: DWORD
   } deriving (Eq, Show)
 
+-- | This type represents a mouse event. The structure is documented here:
+-- https://learn.microsoft.com/en-us/windows/console/mouse-event-record-str
 data MouseEventRecord = MouseEventRecordC
   { mousePosition :: COORD
   , buttonState :: DWORD
@@ -39,18 +44,26 @@ data MouseEventRecord = MouseEventRecordC
   , eventFlags :: DWORD
   } deriving (Eq, Show)
 
+-- | This type represents a window size change event. The structure is documented here:
+-- https://learn.microsoft.com/en-us/windows/console/window-buffer-size-record-str
 newtype WindowBufferSizeRecord = WindowBufferSizeRecordC
   { windowSize :: COORD
   } deriving (Eq, Show)
 
+-- | This type represents a window menu event. (Current ignored by VTY). The structure
+-- is documented here: https://learn.microsoft.com/en-us/windows/console/menu-event-record-str
 newtype MenuEventRecord = MenuEventRecordC
   { commandId :: UINT
   } deriving (Eq, Show)
 
+-- | This type represents a window focus change event. The structure is documented here:
+-- https://learn.microsoft.com/en-us/windows/console/focus-event-record-str
 newtype FocusEventRecord = FocusEventRecordC
   { setFocus :: BOOL
   } deriving (Eq, Show)
 
+-- | Description of a Windows console input event. Documented here:
+-- https://learn.microsoft.com/en-us/windows/console/input-record-str
 data WinConsoleInputEvent =
     KeyEventRecordU KeyEventRecord
   | MouseEventRecordU MouseEventRecord
@@ -59,6 +72,8 @@ data WinConsoleInputEvent =
   | FocusEventRecordU FocusEventRecord
   deriving (Eq, Show)
 
+-- | A wrapper for the ReadConsoleInput Win32 API as documented here:
+-- https://learn.microsoft.com/en-us/windows/console/readconsoleinput
 readConsoleInput :: Ptr WinConsoleInputEvent -> Int -> Handle -> IO [WinConsoleInputEvent]
 readConsoleInput inputRecordPtr maxEvents handle = withHandleToHANDLE handle (readConsoleInput' inputRecordPtr maxEvents)
 

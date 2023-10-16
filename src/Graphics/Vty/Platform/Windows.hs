@@ -1,3 +1,7 @@
+-- | Provides function to initialize the Vty data structure. This is the entry
+-- point for Vty applications developed for Windows. In cross-platform
+-- development however, users should use the Graphics.Vty.CrossPlatform module
+-- instead.
 module Graphics.Vty.Platform.Windows
   ( mkVty,
     mkVtyWithSettings
@@ -14,6 +18,7 @@ import Graphics.Vty.Platform.Windows.Settings
 import Graphics.Vty.Platform.Windows.Input ( buildInput )
 import Graphics.Vty.Platform.Windows.Output ( buildOutput )
 
+-- | Given a user configuration, initialize the Vty environment
 mkVty :: VtyUserConfig -> IO Vty
 mkVty userConfig = mkVtyWithSettings userConfig =<< defaultSettings
 

@@ -1,3 +1,4 @@
+-- | This module provides functions to obtain VT escape sequences for the Windows platform
 module Graphics.Vty.Platform.Windows.WindowsCapabilities
     ( getStringCapability,
       getIntCapability
@@ -5,9 +6,13 @@ module Graphics.Vty.Platform.Windows.WindowsCapabilities
 
 import qualified Data.Map as M
 
+-- | Lookup for terminal capabilities that have a string value.
+-- All Windows supported escape sequences are described here:
+-- https://learn.microsoft.com/en-us/windows/console/console-virtual-terminal-sequences
 getStringCapability :: String -> Maybe String
 getStringCapability cap = M.lookup cap windowsStringCaps
 
+-- | Lookup a terminal capability that has an integer value
 getIntCapability :: String -> Maybe Int
 getIntCapability cap = M.lookup cap windowsIntCaps
 
@@ -17,8 +22,9 @@ esc code = '\ESC' : code
 csi :: String -> String
 csi code = esc $ '[' : code
 
--- What is the best way to get term capabilities for Windows? For now, I'll just hardcode these...
--- Windows claims to support all xterm-256color sequences. 
+-- | Mapping of capability names to VT escape sequences for the Windows platform
+-- All Windows supported escape sequences are described here:
+-- https://learn.microsoft.com/en-us/windows/console/console-virtual-terminal-sequences
 windowsStringCaps :: M.Map String String
 windowsStringCaps = M.fromList
     [ ("bold", csi "1m")

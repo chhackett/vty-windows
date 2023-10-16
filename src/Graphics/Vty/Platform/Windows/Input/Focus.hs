@@ -1,3 +1,4 @@
+-- | Escape sequences for focus events and some focus related functions
 module Graphics.Vty.Platform.Windows.Input.Focus
   ( requestFocusEvents
   , disableFocusEvents

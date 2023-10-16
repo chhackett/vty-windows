@@ -1,5 +1,6 @@
 {-# LANGUAGE ForeignFunctionInterface, CPP #-}
-
+-- | This module provides wrappers around Win32 API calls. These functions provide initialization,
+-- shutdown, and input event handling.
 module Graphics.Vty.Platform.Windows.WindowsInterfaces
   ( readBuf,
     configureInput,
@@ -25,6 +26,9 @@ import System.Win32.Console
 
 foreign import ccall "windows.h WaitForSingleObject" c_WaitForSingleObject :: HANDLE -> DWORD -> IO DWORD
 
+-- | Read the contents of the Windows input buffer. The contents are parsed and either written to
+-- the TChan queue for Window size events, or written to the Word8 buffer for keyboard events and 
+-- VT sequences. Returns the # of bytes written to the Word8 buffer.
 readBuf :: TChan InternalEvent -> Ptr WinConsoleInputEvent -> Handle -> Ptr Word8 -> Int -> IO Int
 readBuf eventChannel inputEventPtr handle bufferPtr maxInputRecords = do
     ret <- withHandleToHANDLE handle (`c_WaitForSingleObject` 500)
@@ -74,7 +78,7 @@ readBuf' eventChannel inputEventPtr handle bufferPtr maxInputRecords = do
             return (offset + length utf8Char, Nothing)
 
 
--- Configure Windows to correctly handle input/output in virtual terminal mode
+-- | Configure Windows to correctly handle input for a Vty application
 configureInput :: Handle -> IO (IO (), IO ())
 configureInput inputHandle = do
     withHandleToHANDLE inputHandle $ \wh -> do
@@ -83,6 +87,7 @@ configureInput inputHandle = do
         pure (setMode,
               setConsoleMode wh original)
 
+-- | Configure Windows to correctly handle output for a Vty application
 configureOutput :: Handle -> IO (IO ())
 configureOutput outputHandle = do
     withHandleToHANDLE outputHandle $ \wh -> do

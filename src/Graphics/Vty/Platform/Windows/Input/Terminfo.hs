@@ -1,3 +1,4 @@
+-- | This module provides mappings for keyboard characters and modification keys to VTY event values
 module Graphics.Vty.Platform.Windows.Input.Terminfo
   ( classifyMapForTerm
   , universalTable

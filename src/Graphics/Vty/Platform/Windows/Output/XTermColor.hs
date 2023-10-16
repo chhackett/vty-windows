@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 
+-- | Provides function to reserve and configure a terminal for a Vty application
 module Graphics.Vty.Platform.Windows.Output.XTermColor
   ( reserveTerminal
   )

@@ -1,5 +1,8 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
+
+-- | Provides functions for configuring the terminal for VT processing, and to 
+-- change the window size
 module Graphics.Vty.Platform.Windows.Output.TerminfoBased
   ( reserveTerminal
   , setWindowSize
@@ -249,6 +252,7 @@ getWindowSize handle = do
 
 foreign import ccall "set_screen_size" cSetScreenSize :: CInt -> CInt -> HANDLE -> IO CInt
 
+-- | Resize the console window to the specified size. Throws error on failure.
 setWindowSize :: Handle -> (Int, Int) -> IO ()
 setWindowSize hOut (w, h) = do
   result <- withHandleToHANDLE hOut $ cSetScreenSize (fromIntegral w) (fromIntegral h)
