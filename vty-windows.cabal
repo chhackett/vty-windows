@@ -39,7 +39,7 @@ library
                       Graphics.Vty.Platform.Windows.WindowsCapabilities
                       Graphics.Vty.Platform.Windows.WindowsConsoleInput
                       Graphics.Vty.Platform.Windows.WindowsInterfaces
-    build-depends:    base >= 4.9.0.0,
+    build-depends:    base >= 4.9.0.0 && < 5.0,
                       blaze-builder,
                       bytestring,
                       containers,
