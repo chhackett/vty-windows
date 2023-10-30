@@ -15,7 +15,6 @@ import Foreign.C.Types ( CWchar(..) )
 import Foreign.Marshal.Alloc (alloca)
 import Foreign.Storable (Storable(..))
 import GHC.Ptr ( Ptr )
-import System.Win32.Word
 import System.Win32.Console
 import System.Win32.Types
 import System.IO (Handle)

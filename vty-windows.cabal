@@ -8,6 +8,7 @@ maintainer:         chris.h.hackett@gmail.com
 category:           Graphics
 build-type:         Simple
 extra-doc-files:    CHANGELOG.md
+extra-source-files: cbits/win_pseudo_console.c
 
 common warnings
     ghc-options: -Wall
