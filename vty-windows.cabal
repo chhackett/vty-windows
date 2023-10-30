@@ -6,6 +6,8 @@ license-file:       LICENSE
 author:             Chris hackett
 maintainer:         chris.h.hackett@gmail.com
 category:           Graphics
+synopsis:           Windows backend for Vty
+description:        This package provides Windows terminal support for Vty.
 build-type:         Simple
 extra-doc-files:    CHANGELOG.md
 extra-source-files: cbits/win_pseudo_console.c
