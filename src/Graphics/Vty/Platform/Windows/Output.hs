@@ -16,10 +16,6 @@ import Graphics.Vty.Output
 
 import Data.List (isPrefixOf)
 
-#if !MIN_VERSION_base(4,11,0)
-import Data.Monoid ((<>))
-#endif
-
 -- | Returns an `Output` for the terminal specified in `WindowsSettings`.
 --
 -- The specific Output implementation used is hidden from the API user.

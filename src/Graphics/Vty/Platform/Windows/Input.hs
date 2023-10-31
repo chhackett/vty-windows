@@ -125,9 +125,6 @@ import Graphics.Vty.Platform.Windows.Settings
 import Graphics.Vty.Platform.Windows.WindowsInterfaces ( configureInput )
 
 import Data.Maybe ( isNothing )
-#if !MIN_VERSION_base(4,11,0)
-import Data.Monoid ((<>))
-#endif
 
 -- | Set up the terminal with file descriptor `inputFd` for input.
 -- Returns an 'Input'.
