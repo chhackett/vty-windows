@@ -48,12 +48,9 @@ data PicWithBGAttr = PicWithBGAttr
 
 instance Arbitrary PicWithBGAttr where
     arbitrary = do
-        DefaultImage image <- arbitrary
-        let win = MockWindow (imageWidth image) (imageHeight image)
-        attr <- arbitrary
-        return $ PicWithBGAttr (picForImage image)
-                               win
-                               attr
+      DefaultImage image <- arbitrary
+      let win = MockWindow (imageWidth image) (imageHeight image)
+      PicWithBGAttr (picForImage image) win <$> arbitrary
 
 instance Arbitrary Picture where
     arbitrary = do

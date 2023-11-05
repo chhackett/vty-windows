@@ -28,7 +28,7 @@ import Blaze.ByteString.Builder (Write, writeToByteString, writeStorable, writeW
 
 import Data.IORef ( newIORef, readIORef, writeIORef )
 import Data.Maybe (isJust, isNothing, fromJust)
-import Data.Word
+import Data.Word ( Word8 )
 
 #if !MIN_VERSION_base(4,8,0)
 import Data.Foldable (foldMap)
@@ -336,18 +336,18 @@ writeURLEscapes NoLinkChange =
 -- bytes.
 terminfoWriteSetAttr :: DisplayContext -> TerminfoCaps -> Bool -> FixedAttr -> Attr -> DisplayAttrDiff -> Write
 terminfoWriteSetAttr dc terminfoCaps urlsEnabled prevAttr reqAttr diffs =
-    urlAttrs urlsEnabled `mappend` case (foreColorDiff diffs == ColorToDefault) || (backColorDiff diffs == ColorToDefault) of
+    urlAttrs urlsEnabled `mappend` if (foreColorDiff diffs == ColorToDefault) || (backColorDiff diffs == ColorToDefault)
         -- The only way to reset either color, portably, to the default
         -- is to use either the set state capability or the set default
         -- capability.
-        True -> do
+        then
             case reqDisplayCapSeqFor (displayAttrCaps terminfoCaps)
                                      (fixedStyle attr)
                                      (styleToApplySeq $ fixedStyle attr) of
                 -- only way to reset a color to the defaults
                 EnterExitSeq caps -> writeDefaultAttr dc urlsEnabled
                                      `mappend`
-                                     foldMap (\cap -> writeCapExpr cap []) caps
+                                     foldMap (`writeCapExpr` []) caps
                                      `mappend`
                                      setColors
                 -- implicitly resets the colors to the defaults
@@ -360,7 +360,7 @@ terminfoWriteSetAttr dc terminfoCaps urlsEnabled prevAttr reqAttr diffs =
                                   `mappend` setColors
         -- Otherwise the display colors are not changing or changing
         -- between two non-default points.
-        False -> do
+        else
             -- Still, it could be the case that the change in display
             -- attributes requires the colors to be reset because the
             -- required capability was not available.
@@ -373,7 +373,7 @@ terminfoWriteSetAttr dc terminfoCaps urlsEnabled prevAttr reqAttr diffs =
                 -- ever reached! Changes the style and color states
                 -- according to the differences with the currently
                 -- applied states.
-                EnterExitSeq caps -> foldMap (\cap -> writeCapExpr cap []) caps
+                EnterExitSeq caps -> foldMap (`writeCapExpr` []) caps
                                      `mappend`
                                      writeColorDiff Foreground (foreColorDiff diffs)
                                      `mappend`
@@ -389,9 +389,6 @@ terminfoWriteSetAttr dc terminfoCaps urlsEnabled prevAttr reqAttr diffs =
     where
         urlAttrs True = writeURLEscapes (urlDiff diffs)
         urlAttrs False = mempty
-        colorMap = if useAltColorMap terminfoCaps
-                   then altColorIndex
-                   else ansiColorIndex
         attr = fixDisplayAttr prevAttr reqAttr
 
         -- italics can't be set via SGR, so here we manually
@@ -424,12 +421,13 @@ terminfoWriteSetAttr dc terminfoCaps urlsEnabled prevAttr reqAttr diffs =
 
         writeColor side (RGBColor r g b) =
             case outputColorMode (contextDevice dc) of
-                FullColor ->
-                    hardcodeColor side (r, g, b)
-                _ ->
-                    error "clampColor should remove rgb colors in standard mode"
+                FullColor -> hardcodeColor side (r, g, b)
+                _         -> error "clampColor should remove rgb colors in standard mode"
         writeColor side c =
             writeCapExpr (setSideColor side terminfoCaps) [toEnum $ colorMap c]
+        colorMap = if useAltColorMap terminfoCaps
+                   then altColorIndex
+                   else ansiColorIndex
 
 -- a color can either be in the foreground or the background
 data ColorSide = Foreground | Background

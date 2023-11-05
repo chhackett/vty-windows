@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               vty-windows
-version:            0.1.0.2
+version:            0.1.0.3
 license:            BSD-3-Clause
 license-file:       LICENSE
 author:             Chris hackett
@@ -40,22 +40,22 @@ library
                       Graphics.Vty.Platform.Windows.WindowsConsoleInput
                       Graphics.Vty.Platform.Windows.WindowsInterfaces
     build-depends:    base                >= 4.9.0.0 && < 5.0,
-                      Win32               >= 2.8.5.0 && < 3.0,
-                      bytestring          >= 0.11.4 && < 1.0,
-                      deepseq             >= 1.4.2 && < 2.0,
-                      filepath            >= 1.4.2 && < 2.0,
-                      blaze-builder       >= 0.4.2 && < 1.0,
-                      containers          >= 0.5.7 && < 1.0,
-                      directory           >= 1.3.7 && < 2.0,
-                      microlens           >= 0.4.13 && < 1.0,
-                      microlens-mtl       >= 0.2.0 && < 1.0,
-                      mtl                 >= 2.2.2 && < 3.0,
-                      transformers        >= 0.5.6 && < 1.0,
-                      microlens-th        >= 0.4.3 && < 1.0,
-                      parsec              >= 3.1.16 && < 4.0,
-                      stm                 >= 2.5.1 && < 3.0,
-                      utf8-string         >= 1.0.2 && < 2.0,
-                      vector              >= 0.13.0 && < 1.0,
+                      blaze-builder,
+                      bytestring,
+                      containers,
+                      deepseq,
+                      directory,
+                      filepath,
+                      microlens,
+                      microlens-mtl,
+                      microlens-th,
+                      mtl,
+                      parsec,
+                      stm,
+                      transformers,
+                      utf8-string,
+                      vector,
                       vty                 >= 6.0 && < 7.0,
+                      Win32               >= 2.8.5.0 && < 3.0,
     hs-source-dirs:   src
     default-language: Haskell2010
