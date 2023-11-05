@@ -12,6 +12,10 @@ build-type:         Simple
 extra-doc-files:    CHANGELOG.md
 extra-source-files: cbits/win_pseudo_console.c
 
+source-repository head
+  type: git
+  location: https://github.com/chhackett/vty-windows
+
 common warnings
     ghc-options: -Wall
 
