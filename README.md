@@ -48,10 +48,15 @@ cabal install vty-windows
 
 **Important Note**
 Developers that want to develop cross platform applications using the vty
-library should directly depend on [vty-crossplatform](https://github.com/jtdaugherty/vty-crossplatform), and not this library.
+library should directly depend on [vty-crossplatform]
+(https://github.com/jtdaugherty/vty-crossplatform), and not this library.
 
 If you wish to only target the Windows platform, then using vty-windows would
 be the correct approach.
+
+Currently, only the Command Prompt and Powershell terminals are the only fully
+supported terminals. Other terminals, such as mintty, Alacritty, ConEmu, etc,
+have varying levels of support. Bug reports are welcome!
 
 # Contributing
 
@@ -66,6 +71,7 @@ should consider to make submitting patches easier for all concerned:
 
 # Known Issues
 
+In Powershell, foreground and background colors may render incorrectly.
 
 # Further Reading
 
