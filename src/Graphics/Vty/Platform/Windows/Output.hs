@@ -9,7 +9,9 @@ module Graphics.Vty.Platform.Windows.Output
   )
 where
 
+import Graphics.Vty.Config
 import Graphics.Vty.Platform.Windows.Settings
+import Graphics.Vty.Platform.Windows.Output.Color (detectColorMode)
 import Graphics.Vty.Platform.Windows.Output.XTermColor as XTermColor
 import Graphics.Vty.Platform.Windows.Output.TerminfoBased as TerminfoBased
 import Graphics.Vty.Output
@@ -30,11 +32,14 @@ import Data.List (isPrefixOf)
 --
 --      * If TERM starts with "xterm", "screen" or "tmux", use XTermColor.
 --      * otherwise use the TerminfoBased driver.
-buildOutput :: WindowsSettings -> IO Output
-buildOutput settings = do
+buildOutput :: VtyUserConfig -> WindowsSettings -> IO Output
+buildOutput config settings = do
     let outHandle = settingOutputFd settings
         termName = settingTermName settings
-        colorMode = settingColorMode settings
+
+    colorMode <- case configPreferredColorMode config of
+        Nothing -> detectColorMode termName
+        Just m -> return m
 
     if isXtermLike termName
         then XTermColor.reserveTerminal termName outHandle colorMode

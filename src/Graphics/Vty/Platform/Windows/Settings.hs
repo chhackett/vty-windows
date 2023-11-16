@@ -7,8 +7,6 @@ module Graphics.Vty.Platform.Windows.Settings
 where
 
 import Data.Maybe ( fromMaybe ) 
-import Graphics.Vty.Attributes.Color ( ColorMode(..) )
-import Graphics.Vty.Platform.Windows.Output.Color ( detectColorMode, defaultColorMode )
 import System.Environment ( lookupEnv )
 import System.IO ( Handle, stdin, stdout )
 
@@ -20,9 +18,6 @@ data WindowsSettings = WindowsSettings
   -- ^ The output file descriptor to use.
   , settingTermName :: String
   -- ^ The terminal name used to look up terminfo capabilities.
-  , settingColorMode :: ColorMode
-  -- ^ The color mode used to know how many colors the terminal
-  -- supports.
   }
   deriving (Show, Eq)
 
@@ -31,12 +26,10 @@ defaultSettings :: IO WindowsSettings
 defaultSettings = do
     mb <- lookupEnv termVariable
     let termName = fromMaybe "xterm-256color" mb
-    colorMode <- maybe defaultColorMode detectColorMode mb
 
     return $ WindowsSettings { settingInputFd  = stdin
                              , settingOutputFd  = stdout
                              , settingTermName  = termName
-                             , settingColorMode = colorMode
                              }
 
 -- | The TERM environment variable

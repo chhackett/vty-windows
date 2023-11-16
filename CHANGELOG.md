@@ -20,3 +20,8 @@ Bug fixes:
 
 Package changes:
  * Removed unnecessary version bounds on dependencies.
+
+0.2.0.0
+-------
+* The color mode configuration moved from Windows specific
+  settings to the vty user config.
