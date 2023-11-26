@@ -25,3 +25,8 @@ Package changes:
 -------
 * The color mode configuration moved from Windows specific
   settings to the vty user config.
+
+0.2.0.1
+-------
+* On shutdown, make sure to shut down output interface before shutting down input interface.
+  Fixes mouse reset bug.
