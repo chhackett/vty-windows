@@ -8,13 +8,14 @@ module Graphics.Vty.Platform.Windows
   )
 where
 
-import Control.Monad (when)
+import Control.Concurrent.STM
+import Control.Monad ( when, unless )
 
-import Graphics.Vty (Vty, installCustomWidthTable, mkVtyFromPair)
-
-import Graphics.Vty.Config (VtyUserConfig(..))
-import Graphics.Vty.Platform.Windows.Settings
-    ( defaultSettings, WindowsSettings(settingTermName) )
+import Graphics.Vty ( Vty(..), installCustomWidthTable, mkVtyFromPair )
+import Graphics.Vty.Config ( VtyUserConfig(..) )
+import Graphics.Vty.Input ( Input(shutdownInput) )
+import Graphics.Vty.Output ( Output(releaseTerminal, releaseDisplay) )
+import Graphics.Vty.Platform.Windows.Settings ( defaultSettings, WindowsSettings(settingTermName) )
 import Graphics.Vty.Platform.Windows.Input ( buildInput )
 import Graphics.Vty.Platform.Windows.Output ( buildOutput )
 
@@ -39,4 +40,17 @@ mkVtyWithSettings userConfig settings = do
 
     input <- buildInput userConfig settings
     out <- buildOutput userConfig settings
-    mkVtyFromPair input out
+    vty <- mkVtyFromPair input out
+
+    shutdownVar <- newTVarIO False
+    let shutdownIo = do
+            alreadyShutdown <- atomically $ swapTVar shutdownVar True
+            unless alreadyShutdown $ do
+                releaseDisplay out
+                releaseTerminal out
+                shutdownInput input
+
+        shutdownStatus = readTVarIO shutdownVar
+
+    return $ vty { shutdown = shutdownIo
+                 , isShutdown = shutdownStatus }

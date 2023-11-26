@@ -42,7 +42,7 @@ windowsStringCaps = M.fromList
     , ("clear", csi "H" ++ csi "J")   -- move cursor to home row, then clear from cursor to end of screen (whole screen)
     , ("cup", csi "%i%p1%d;%p2%dH")
     , ("civis", csi "?25l")
-    , ("cnorm", csi "34h" ++ csi "?25h")
+    , ("cnorm", csi "?25h")
     , ("home", csi "H")
     , ("ed", csi "J")
     , ("el", csi "K")
