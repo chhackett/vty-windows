@@ -15,7 +15,7 @@ import Graphics.Vty ( Vty(..), installCustomWidthTable, mkVtyFromPair )
 import Graphics.Vty.Config ( VtyUserConfig(..) )
 import Graphics.Vty.Input ( Input(shutdownInput) )
 import Graphics.Vty.Output ( Output(releaseTerminal, releaseDisplay) )
-import Graphics.Vty.Platform.Windows.Settings ( defaultSettings, WindowsSettings(settingTermName) )
+import Graphics.Vty.Platform.Windows.Settings ( defaultSettings, WindowsSettings(settingTermName))
 import Graphics.Vty.Platform.Windows.Input ( buildInput )
 import Graphics.Vty.Platform.Windows.Output ( buildOutput )
 
@@ -38,8 +38,10 @@ mkVtyWithSettings userConfig settings = do
                                 (Just $ settingTermName settings)
                                 (configTermWidthMaps userConfig)
 
-    input <- buildInput userConfig settings
-    out <- buildOutput userConfig settings
+    screenSizeVar <- newTVarIO Nothing
+
+    input <- buildInput screenSizeVar userConfig settings
+    out <- buildOutput screenSizeVar userConfig settings
     vty <- mkVtyFromPair input out
 
     shutdownVar <- newTVarIO False

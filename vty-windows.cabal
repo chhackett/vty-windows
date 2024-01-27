@@ -18,10 +18,13 @@ source-repository head
 
 common warnings
     ghc-options: -Wall
+                --  -with-rtsopts=--io-manager=native
 
 library
     import:           warnings
+    -- includes:         cbits/gwinsz.h
     c-sources:        cbits/win_commands.c
+                      -- cbits/gwinsz.c
     exposed-modules:  Data.Terminfo.Eval
                       Data.Terminfo.Parse
                       Graphics.Vty.Platform.Windows
@@ -43,18 +46,21 @@ library
                       Graphics.Vty.Platform.Windows.WindowsCapabilities
                       Graphics.Vty.Platform.Windows.WindowsConsoleInput
                       Graphics.Vty.Platform.Windows.WindowsInterfaces
+    Other-Modules:    Graphics.Vty.Platform.Windows.ScreenSize
     build-depends:    base                >= 4.9 && < 5,
                       blaze-builder,
                       bytestring,
                       containers,
                       deepseq,
                       directory,
+                      echo,
                       filepath,
                       microlens,
                       microlens-mtl,
                       microlens-th,
                       mtl,
                       parsec,
+                      process             >= 1.0.1.1,
                       stm,
                       transformers,
                       utf8-string,

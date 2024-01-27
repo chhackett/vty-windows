@@ -6,11 +6,13 @@ module Graphics.Vty.Platform.Windows.Output.XTermColor
   )
 where
 
+import Control.Concurrent.STM
 import Graphics.Vty.Platform.Windows.Input.Mouse
 import Graphics.Vty.Platform.Windows.Input.Focus
 import Graphics.Vty.Attributes.Color (ColorMode)
 import qualified Graphics.Vty.Platform.Windows.Output.TerminfoBased as TerminfoBased
 import Graphics.Vty.Output
+import Graphics.Vty.Image (DisplayRegion)
 
 import Blaze.ByteString.Builder (writeToByteString)
 import Blaze.ByteString.Builder.Word (writeWord8)
@@ -28,6 +30,7 @@ import Data.IORef ( newIORef, readIORef, writeIORef )
 import Data.Monoid ((<>))
 #endif
 
+import Graphics.Vty.Input (Input)
 import System.IO ( Handle, hPutBufNonBlocking )
 
 -- | Write a 'ByteString' to an 'Fd'.
@@ -37,14 +40,14 @@ fdWrite fd s =
         hPutBufNonBlocking fd (castPtr buf) (fromIntegral len)
 
 -- | Construct an Xterm output driver. Initialize the display to UTF-8.
-reserveTerminal :: ( Applicative m, MonadIO m ) => String -> Handle -> ColorMode -> m Output
-reserveTerminal variant outFd colorMode = liftIO $ do
+reserveTerminal :: ( Applicative m, MonadIO m ) => TVar (Maybe DisplayRegion) -> String -> Handle -> ColorMode -> m Output
+reserveTerminal screenVar variant outFd colorMode = liftIO $ do
     let flushedPut = void . fdWrite outFd
     -- If the terminal variant is xterm-color use xterm instead since,
     -- more often than not, xterm-color is broken.
     let variant' = if variant == "xterm-color" then "xterm" else variant
 
-    t <- TerminfoBased.reserveTerminal variant' outFd colorMode
+    t <- TerminfoBased.reserveTerminal screenVar variant' outFd colorMode
 
     mouseModeStatus <- newIORef False
     focusModeStatus <- newIORef False

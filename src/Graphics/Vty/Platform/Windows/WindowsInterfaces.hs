@@ -1,10 +1,12 @@
-{-# LANGUAGE ForeignFunctionInterface, CPP #-}
+{-# LANGUAGE ForeignFunctionInterface, CPP, ScopedTypeVariables #-}
+
 -- | This module provides wrappers around Win32 API calls. These functions provide initialization,
 -- shutdown, and input event handling.
 module Graphics.Vty.Platform.Windows.WindowsInterfaces
   ( readBuf,
     configureInput,
-    configureOutput
+    configureOutput,
+    isEnvMintty
   ) where
 
 #include "windows_cconv.h"
@@ -14,15 +16,21 @@ import Graphics.Vty.Input.Events ( Event(EvResize), InternalEvent(InputEvent) )
 
 import Control.Concurrent (yield)
 import Control.Concurrent.STM ( TChan, atomically, writeTChan )
+import Control.Exception (try, throw, SomeException(..))
 import Control.Monad (foldM)
 import Data.Bits ((.|.), (.&.), shiftL)
 import Codec.Binary.UTF8.String (encodeChar)
 import Data.Word (Word8)
 import Foreign.Storable (Storable(..))
 import GHC.Ptr ( Ptr )
-import System.IO ( Handle )
+import System.IO ( Handle, hSetBuffering, BufferMode(..), hSetEcho, hGetContents )
+import System.IO.Echo
 import System.Win32.Types ( HANDLE, withHandleToHANDLE, DWORD )
 import System.Win32.Console
+import System.Process (StdStream(..), createProcess, shell,
+                       std_in, std_out, waitForProcess)
+import System.Exit
+
 
 foreign import ccall "windows.h WaitForSingleObject" c_WaitForSingleObject :: HANDLE -> DWORD -> IO DWORD
 
@@ -77,21 +85,61 @@ readBuf' eventChannel inputEventPtr handle bufferPtr maxInputRecords = do
             mapM_ (\(w, offset') -> pokeElemOff bufferPtr (offset + offset') w) $ zip utf8Char [0..]
             return (offset + length utf8Char, Nothing)
 
-
 -- | Configure Windows to correctly handle input for a Vty application
-configureInput :: Handle -> IO (IO (), IO ())
-configureInput inputHandle = do
-    withHandleToHANDLE inputHandle $ \wh -> do
+configureInput :: Handle -> Bool -> IO (IO (), IO ())
+configureInput inputHandle isMintty = do
+  withHandleToHANDLE inputHandle $ \wh -> do
+    if isMintty
+    then do
+      settings <- getSttySettings inputHandle
+      appendFile "C:\\temp\\debug.log" $ "configuring input. Settings: " ++ settings ++ "\n"
+      return (configureStty "raw -echo" inputHandle, configureStty settings inputHandle)
+    else do
         original <- getConsoleMode wh
         let setMode = setConsoleMode wh $ eNABLE_VIRTUAL_TERMINAL_INPUT .|. eNABLE_EXTENDED_FLAGS
         pure (setMode,
               setConsoleMode wh original)
 
+-- | Commands to configure the @stty@ command-line utility.
+
+getSttySettings :: Handle -> IO String
+getSttySettings inputHandle = configureStty' "-g" inputHandle
+
+-- | Create an @stty@ process, wait for it to complete, and return its output.
+configureStty :: String -> Handle -> IO ()
+configureStty params inputHandle = do
+  _ <- configureStty' params inputHandle
+  return ()
+
+configureStty' :: String -> Handle -> IO String
+configureStty' params inputHandle = do
+  appendFile "C:\\temp\\debug.log" "sttySettings\n"
+  let stty = (shell $ "stty " ++ params) {
+        std_in  = UseHandle inputHandle
+      , std_out = CreatePipe
+      }
+  (_, mbStdout, _, rStty) <- createProcess stty
+  exStty <- waitForProcess rStty
+  case exStty of
+    e@ExitFailure{} -> error $ show e
+    ExitSuccess     -> maybe (return "") hGetContents mbStdout
+
 -- | Configure Windows to correctly handle output for a Vty application
-configureOutput :: Handle -> IO (IO ())
-configureOutput outputHandle = do
+configureOutput :: Handle -> Bool -> IO (IO ())
+configureOutput outputHandle isMintty = do
     withHandleToHANDLE outputHandle $ \wh -> do
-        original <- getConsoleMode wh
         setConsoleOutputCP 65001
-        setConsoleMode wh $ eNABLE_VIRTUAL_TERMINAL_PROCESSING .|. eNABLE_PROCESSED_OUTPUT
-        pure (setConsoleMode wh original)
+        if isMintty
+        then return (return ())
+        else do
+            original <- getConsoleMode wh
+            setConsoleMode wh $ eNABLE_VIRTUAL_TERMINAL_PROCESSING .|. eNABLE_PROCESSED_OUTPUT
+            pure (setConsoleMode wh original)
+
+isEnvMintty :: Handle -> IO Bool
+isEnvMintty handle = do
+  result <- try $ withHandleToHANDLE handle $ \wh -> getConsoleMode wh
+  return $
+    case result of
+          Left (_ :: SomeException) -> True
+          Right _ -> False

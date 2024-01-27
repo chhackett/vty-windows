@@ -13,6 +13,7 @@ import Graphics.Vty.Platform.Windows.Input.Classify.Types
 import Graphics.Vty.Platform.Windows.Input.Mouse
 import Graphics.Vty.Platform.Windows.Input.Focus
 import Graphics.Vty.Platform.Windows.Input.Paste
+import Graphics.Vty.Platform.Windows.ScreenSize
 
 import Codec.Binary.UTF8.Generic (decode)
 
@@ -68,6 +69,7 @@ classify table = process
                     else Chunk
                 _ | isMouseEvent s      -> classifyMouseEvent s
                 _ | isFocusEvent s      -> classifyFocusEvent s
+                _ | isScreenSizeEvent s -> classifyScreenSize s
                 Just (c,cs) | c >= 0xC2 -> classifyUtf8 c cs
                 _                       -> standardClassifier s
 

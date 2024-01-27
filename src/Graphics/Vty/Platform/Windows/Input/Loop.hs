@@ -13,22 +13,22 @@ module Graphics.Vty.Platform.Windows.Input.Loop
   )
 where
 
+import Graphics.Vty.Platform.Windows.ScreenSize
+import Control.Concurrent.STM
+import Graphics.Vty.Image (DisplayRegion)
 import Graphics.Vty.Input
-
 import Graphics.Vty.Config (VtyUserConfig(..))
-
-import Graphics.Vty.Platform.Windows.Input.Classify ( classify )
+import Graphics.Vty.Platform.Windows.Input.Classify (classify)
 import Graphics.Vty.Platform.Windows.Input.Classify.Types
-import Graphics.Vty.Platform.Windows.WindowsConsoleInput ( WinConsoleInputEvent )
+import Graphics.Vty.Platform.Windows.WindowsConsoleInput (WinConsoleInputEvent)
 import Graphics.Vty.Platform.Windows.WindowsInterfaces (readBuf)
 
-import Control.Applicative ( Alternative(many) )
+import Control.Applicative (Alternative(many))
 import Control.Concurrent
-    ( ThreadId, forkOS, killThread, newEmptyMVar, putMVar, takeMVar )
-import Control.Concurrent.STM ( atomically, writeTChan, newTChan )
+    (ThreadId, forkOS, killThread, newEmptyMVar, putMVar, takeMVar)
 import Control.Exception (mask, try, catch, SomeException)
-import Lens.Micro ( over, ASetter, ASetter' )
-import Lens.Micro.Mtl ( (.=), use )
+import Lens.Micro (over, ASetter, ASetter')
+import Lens.Micro.Mtl ((.=), use)
 import Control.Monad (unless, mzero, forM_)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans (lift)
@@ -36,18 +36,16 @@ import Control.Monad.Trans.State (StateT(..), evalStateT)
 import Control.Monad.State.Class (MonadState, modify)
 import Control.Monad.Trans.Reader (ReaderT(..), asks, ask)
 
-import Lens.Micro.TH ( makeLenses )
+import Lens.Micro.TH (makeLenses)
 
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString as BS
 import Data.ByteString.Char8 (ByteString)
 import Data.Word (Word8)
-
 import Foreign (allocaArray)
 import Foreign.Ptr (Ptr, castPtr)
-
 import System.Environment (getEnv)
-import System.IO ( Handle )
+import System.IO (Handle, hGetBufNonBlocking)
 
 data InputBuffer = InputBuffer
     { _ptr :: Ptr Word8
@@ -64,6 +62,8 @@ data InputState = InputState
     , _originalInput :: Input
     , _inputBuffer :: InputBuffer
     , _classifier :: ClassifierState -> ByteString -> KClass
+    , _isTermMintty :: Bool
+    , _screenSizeVar :: TVar (Maybe DisplayRegion)
     }
 
 makeLenses ''InputState
@@ -92,26 +92,37 @@ addBytesToProcess block = unprocessedBytes <>= block
 emit :: Event -> InputM ()
 emit event = do
     logMsg $ "parsed event: " ++ show event
-    lift (asks eventChannel) >>= liftIO . atomically . flip writeTChan (InputEvent event)
+    liftIO $ appendFile "C:\\temp\\input.log" $ "parsed event: " ++ show event ++ "\n"
+    case event of
+      EvResize x y -> do
+        screenVar <- use screenSizeVar
+        liftIO . atomically . writeTVar screenVar $ Just (x, y)
+      _ -> lift (asks eventChannel) >>= liftIO . atomically . flip writeTChan (InputEvent event)
 
 -- Precondition: Under the threaded runtime. Only current use is from a
 -- forkOS thread. That case satisfies precondition.
 readFromDevice :: InputM ByteString
 readFromDevice = do
     handle <- use inputHandle
-
+    isMintty <- use isTermMintty
     bufferPtr <- use $ inputBuffer.ptr
     winRecordPtr <- use $ inputBuffer.inputRecordPtr
     maxInputRecords <- use $ inputBuffer.consoleEventBufferSize
 
     input <- lift ask
     stringRep <- liftIO $ do
-        bytesRead <- readBuf (eventChannel input) winRecordPtr handle bufferPtr maxInputRecords
+        bytesRead <- readBufInternal (eventChannel input) winRecordPtr handle bufferPtr maxInputRecords isMintty
         if bytesRead > 0
         then BS.packCStringLen (castPtr bufferPtr, fromIntegral bytesRead)
         else return BS.empty
     unless (BS.null stringRep) $ logMsg $ "input bytes: " ++ show (BS8.unpack stringRep)
+    liftIO $ appendFile "C:\\temp\\input.log" $ show (BS8.unpack stringRep) ++ "\n"
     return stringRep
+    where
+      readBufInternal chan winRecordPtr handle bufferPtr maxInputRecords isMintty = do
+        if isMintty
+        then hGetBufNonBlocking handle bufferPtr maxInputRecords
+        else readBuf chan winRecordPtr handle bufferPtr maxInputRecords
 
 parseEvent :: InputM Event
 parseEvent = do
@@ -134,6 +145,7 @@ dropInvalid = do
     b <- use unprocessedBytes
     case c s b of
         Chunk -> do
+            liftIO $ appendFile "C:\\temp\\input.log" $ "Chunk, classifier state: " ++ show s
             classifierState .=
                 case s of
                   ClassifierStart -> ClassifierInChunk b []
@@ -141,12 +153,16 @@ dropInvalid = do
             unprocessedBytes .= BS8.empty
         Invalid -> do
             logMsg "dropping input bytes"
+            liftIO $ appendFile "C:\\temp\\input.log" $ "prefix: " ++ show (BS8.isPrefixOf (BS8.pack "\ESC[") b)
+            liftIO $ appendFile "C:\\temp\\input.log" $ "suffix: " ++ show (BS8.isSuffixOf (BS8.pack "t") b)
+            liftIO $ appendFile "C:\\temp\\input.log" $ "Invalid event, dropping input bytes: " ++ BS8.unpack b
             classifierState .= ClassifierStart
             unprocessedBytes .= BS8.empty
         _ -> return ()
 
-runInputProcessorLoop :: ClassifyMap -> Input -> Handle -> IO ()
-runInputProcessorLoop classifyTable input handle = do
+runInputProcessorLoop :: TVar (Maybe DisplayRegion) -> ClassifyMap -> Input -> Handle -> Bool -> IO ()
+runInputProcessorLoop screenVar classifyTable input handle isMintty = do
+    appendFile "C:\\temp\\loop.log" "runInputProcessorLoop\n"
     let bufferSize = 1024
     -- A key event could require 4 bytes of UTF-8.
     let maxKeyEvents = bufferSize `div` 4
@@ -157,10 +173,12 @@ runInputProcessorLoop classifyTable input handle = do
                         input
                         (InputBuffer bufferPtr inputRecordBuf maxKeyEvents)
                         (classify classifyTable)
+                        isMintty
+                        screenVar
             runReaderT (evalStateT loopInputProcessor s0) input
 
-initInput :: VtyUserConfig -> Handle -> ClassifyMap -> IO Input
-initInput userConfig handle classifyTable = do
+initInput :: TVar (Maybe DisplayRegion) -> VtyUserConfig -> Handle -> ClassifyMap -> Bool -> IO Input
+initInput screenVar userConfig handle classifyTable isMintty = do
     stopSync <- newEmptyMVar
     mDefaultLog <- catch
           (do debugLog <- getEnv "VTY_DEBUG_LOG"
@@ -172,11 +190,13 @@ initInput userConfig handle classifyTable = do
                    <*> maybe (return $ append mDefaultLog)
                              (return . appendFile)
                              (configDebugLog userConfig)
-    inputThread <- forkOSFinally (runInputProcessorLoop classifyTable input handle)
+    appendFile "C:\\temp\\debug.log" "Forking input thread\n"
+    inputThread <- forkOSFinally (runInputProcessorLoop screenVar classifyTable input handle isMintty)
                                  (\_ -> putMVar stopSync ())
     let killAndWait = do
           killThread inputThread
           takeMVar stopSync
+    appendFile "C:\\temp\\debug.log" "Input thread created\n"
     return $ input { shutdownInput = killAndWait }
     where
         append mDebugLog msg =

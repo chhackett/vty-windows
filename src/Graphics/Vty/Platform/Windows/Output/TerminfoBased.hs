@@ -9,9 +9,13 @@ module Graphics.Vty.Platform.Windows.Output.TerminfoBased
   )
 where
 
+import Control.Concurrent.STM
+import Control.Concurrent (forkOS, killThread, threadDelay, newEmptyMVar, putMVar, takeMVar, ThreadId)
+import Control.Exception (mask, try, catch, SomeException)
 import Control.Monad (when)
 import Data.Bits ((.&.))
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BSC
 import Data.ByteString.Internal (toForeignPtr)
 import Data.Terminfo.Parse
     ( CapParam, CapExpression, parseCapExpression )
@@ -20,9 +24,11 @@ import Data.Terminfo.Eval ( writeCapExpr )
 import Graphics.Vty.Attributes
 import Graphics.Vty.Image (DisplayRegion)
 import Graphics.Vty.DisplayAttributes
-import Graphics.Vty.Platform.Windows.WindowsCapabilities (getStringCapability)
-import Graphics.Vty.Platform.Windows.WindowsInterfaces ( configureOutput )
+import Graphics.Vty.Input
 import Graphics.Vty.Output
+import Graphics.Vty.Platform.Windows.WindowsCapabilities (getStringCapability)
+import Graphics.Vty.Platform.Windows.WindowsInterfaces (configureOutput, isEnvMintty)
+import Graphics.Vty.Platform.Windows.ScreenSize (getMinttyScreenSize)
 
 import Blaze.ByteString.Builder (Write, writeToByteString, writeStorable, writeWord8)
 
@@ -38,9 +44,10 @@ import Foreign.C.Types (CInt(..))
 import Foreign.ForeignPtr (withForeignPtr)
 import Foreign.Ptr (Ptr, plusPtr)
 
-import System.IO ( Handle, hPutBufNonBlocking )
+import System.IO (Handle, hPutBufNonBlocking)
 import System.Win32.Types ( HANDLE, withHandleToHANDLE )
 import System.Win32.Console
+
 
 data TerminfoCaps = TerminfoCaps
     { smcup :: Maybe CapExpression
@@ -88,9 +95,19 @@ fdWriteAll outHandle ptr len count
             count' = count + writeCount
         fdWriteAll outHandle ptr' len' count'
 
-sendCapToTerminal :: Output -> CapExpression -> [CapParam] -> IO ()
-sendCapToTerminal t cap capParams = do
-    outputByteBuffer t $ writeToByteString $ writeCapExpr cap capParams
+sendCapToTerminal :: (BSC.ByteString -> IO ()) -> CapExpression -> [CapParam] -> IO ()
+sendCapToTerminal writeOut cap capParams = do
+    writeOut $ writeToByteString $ writeCapExpr cap capParams
+
+writeOutput :: Handle -> BSC.ByteString -> IO ()
+writeOutput outHandle outBytes = do
+  -- appendFile "C:\\temp\\debug.log" $ "bytes to stdout: " ++ show outBytes ++ "\n"
+  let (fptr, offset, len) = toForeignPtr outBytes
+  actualLen <- withForeignPtr fptr
+                $ \ptr -> fdWriteAll outHandle (ptr `plusPtr` offset) len 0
+  when (toEnum len /= actualLen) $ fail $ "Graphics.Vty.Output: outputByteBuffer "
+    ++ "length mismatch. " ++ show len ++ " /= " ++ show actualLen
+    ++ " Please report this bug to vty project."
 
 -- | Constructs an output driver that uses terminfo for all control
 -- codes. While this should provide the most compatible terminal,
@@ -102,9 +119,11 @@ sendCapToTerminal t cap capParams = do
 --
 --  * Providing independent string capabilities for all display
 --    attributes.
-reserveTerminal :: String -> Handle -> ColorMode -> IO Output
-reserveTerminal termName outHandle colorMode = do
-    restoreMode <- configureOutput outHandle
+reserveTerminal :: TVar (Maybe DisplayRegion) -> String -> Handle -> ColorMode -> IO Output
+reserveTerminal screenVar termName outHandle colorMode = do
+    appendFile "C:\\temp\\debug.log" $ "reserveTerminal...\n"
+    isMintty <- isEnvMintty outHandle
+    restoreMode <- configureOutput outHandle isMintty
 
     -- assumes set foreground always implies set background exists.
     -- if set foreground is not set then all color changing style
@@ -159,12 +178,27 @@ reserveTerminal termName outHandle colorMode = do
             , displayAttrCaps = currentDisplayAttrCaps
             , ringBellAudio = probeCap "bel"
             }
+
+        sendCap s = sendCapToTerminal (writeOutput outHandle) (s terminfoCaps)
+        maybeSendCap s = when (isJust $ s terminfoCaps) . sendCap (fromJust . s)
+
+    appendFile "C:\\temp\\debug.log" "Forking screen size thread\n"
+    stopSync <- newEmptyMVar
+    screenSizeThread <- forkOSFinally (getScreenSizeLoop (writeOutput outHandle))
+                                        (\_ -> putMVar stopSync ())
+    let killAndWait = do
+          killThread screenSizeThread
+          takeMVar stopSync
+
+        releaseAction = do
+          sendCap setDefaultAttr []
+          maybeSendCap cnorm []
+          restoreMode
+          killAndWait
+
     let t = Output
             { terminalID = termName
-            , releaseTerminal = do
-                sendCap setDefaultAttr []
-                maybeSendCap cnorm []
-                restoreMode
+            , releaseTerminal = releaseAction
             , supportsBell = return $ isJust $ ringBellAudio terminfoCaps
             , supportsItalics = return $ isJust (enterItalic (displayAttrCaps terminfoCaps)) &&
                                          isJust (exitItalic (displayAttrCaps terminfoCaps))
@@ -181,19 +215,14 @@ reserveTerminal termName outHandle colorMode = do
                 maybeSendCap rmcup []
                 maybeSendCap cnorm []
             , setDisplayBounds = \(w, h) ->
-                setWindowSize outHandle (w, h)
+                setWindowSize t outHandle isMintty (w, h)
             , displayBounds = do
-                rawSize <- getWindowSize outHandle
+                rawSize <- getWindowSize outHandle screenVar isMintty
+                appendFile "C:\\temp\\debug.log" $ "getting displayBounds: " ++ show rawSize ++ "\n"
                 case rawSize of
                     (w, h)  | w < 0 || h < 0 -> fail $ "getwinsize returned < 0 : " ++ show rawSize
                             | otherwise      -> return (w,h)
-            , outputByteBuffer = \outBytes -> do
-                let (fptr, offset, len) = toForeignPtr outBytes
-                actualLen <- withForeignPtr fptr
-                             $ \ptr -> fdWriteAll outHandle (ptr `plusPtr` offset) len 0
-                when (toEnum len /= actualLen) $ fail $ "Graphics.Vty.Output: outputByteBuffer "
-                  ++ "length mismatch. " ++ show len ++ " /= " ++ show actualLen
-                  ++ " Please report this bug to vty project."
+            , outputByteBuffer = writeOutput outHandle
             , supportsCursorVisibility = isJust $ civis terminfoCaps
             , supportsMode = terminfoModeSupported
             , setMode = terminfoSetMode
@@ -205,9 +234,18 @@ reserveTerminal termName outHandle colorMode = do
             , mkDisplayContext = (`terminfoDisplayContext` terminfoCaps)
             , setOutputWindowTitle = const $ return ()
             }
-        sendCap s = sendCapToTerminal t (s terminfoCaps)
-        maybeSendCap s = when (isJust $ s terminfoCaps) . sendCap (fromJust . s)
     return t
+
+forkOSFinally :: IO a -> (Either SomeException a -> IO ()) -> IO ThreadId
+forkOSFinally action and_then =
+  mask $ \restore -> forkOS $ try (restore action) >>= and_then
+
+getScreenSizeLoop :: (BSC.ByteString -> IO()) -> IO ()
+getScreenSizeLoop writeOut = do
+  -- appendFile "C:\\temp\\debug.log" "getScreenSizeLoop\n"
+  getMinttyScreenSize writeOut
+  threadDelay 500000
+  getScreenSizeLoop writeOut
 
 requireCap :: String -> CapExpression
 requireCap capName
@@ -244,24 +282,43 @@ currentDisplayAttrCaps
     , enterBoldMode = probeCap "bold"
     }
 
-getWindowSize :: Handle -> IO (Int,Int)
-getWindowSize handle = do
-    bufferInfo <- withHandleToHANDLE handle getConsoleScreenBufferInfo
+
+-- Report terminal size: "\ESC[18t"
+-- Response sent to stdin, format of response: "\ESC;55;140t"
+getWindowSize :: Handle -> TVar (Maybe DisplayRegion) -> Bool -> IO (Int, Int)
+getWindowSize outHandle screenVar isMintty = do
+  if isMintty
+  then do
+    screenSize <- atomically $ readTVar $ screenVar
+    appendFile "C:\\temp\\debug.log" $ "reading window size... size is: " ++ show screenSize
+    case screenSize of
+      Nothing -> return (100, 100)
+      Just theSize -> return theSize
+  else do
+    bufferInfo <- withHandleToHANDLE outHandle getConsoleScreenBufferInfo
     let coord = dwSize bufferInfo
     return (fromIntegral $ xPos coord, fromIntegral $ yPos coord)
 
 foreign import ccall "set_screen_size" cSetScreenSize :: CInt -> CInt -> HANDLE -> IO CInt
 
 -- | Resize the console window to the specified size. Throws error on failure.
-setWindowSize :: Handle -> (Int, Int) -> IO ()
-setWindowSize hOut (w, h) = do
-  result <- withHandleToHANDLE hOut $ cSetScreenSize (fromIntegral w) (fromIntegral h)
-  if result == 0
-      then return ()
-      else error $ "Unable to setup window size. Got error code: " ++ show result
+-- Mintty: "\e[8;35;100t";
+setWindowSize :: Output -> Handle -> Bool -> (Int, Int) -> IO ()
+setWindowSize output hOut isMintty (w, h) = 
+  if isMintty
+  then do
+    let buf = BSC.pack $ "\ESC[8;" ++ show w ++ ";" ++ show h
+    outputByteBuffer output buf
+  else do
+    result <- withHandleToHANDLE hOut $ cSetScreenSize (fromIntegral w) (fromIntegral h)
+    if result == 0
+        then return ()
+        else error $ "Unable to setup window size. Got error code: " ++ show result
 
 terminfoDisplayContext :: Output -> TerminfoCaps -> DisplayRegion -> IO DisplayContext
-terminfoDisplayContext tActual terminfoCaps r = return dc
+terminfoDisplayContext tActual terminfoCaps r = do
+    appendFile "C:\\temp\\debug.log" $ "display region: " ++ show r ++ "\n"
+    return dc
     where dc = DisplayContext
             { contextDevice = tActual
             , contextRegion = r

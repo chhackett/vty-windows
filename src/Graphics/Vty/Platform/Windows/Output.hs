@@ -1,21 +1,20 @@
 {-# LANGUAGE RecordWildCards, CPP #-}
+
 -- | This module provides a function to build an 'Output' for Windows
 -- terminals.
 --
 -- This module is exposed for testing purposes only; applications should
 -- never need to import this directly.
-module Graphics.Vty.Platform.Windows.Output
-  ( buildOutput
-  )
-where
+module Graphics.Vty.Platform.Windows.Output (buildOutput) where
 
+import Control.Concurrent.STM
 import Graphics.Vty.Config
+import Graphics.Vty.Image (DisplayRegion)
 import Graphics.Vty.Platform.Windows.Settings
 import Graphics.Vty.Platform.Windows.Output.Color (detectColorMode)
 import Graphics.Vty.Platform.Windows.Output.XTermColor as XTermColor
 import Graphics.Vty.Platform.Windows.Output.TerminfoBased as TerminfoBased
 import Graphics.Vty.Output
-
 import Data.List (isPrefixOf)
 
 -- | Returns an `Output` for the terminal specified in `WindowsSettings`.
@@ -32,8 +31,8 @@ import Data.List (isPrefixOf)
 --
 --      * If TERM starts with "xterm", "screen" or "tmux", use XTermColor.
 --      * otherwise use the TerminfoBased driver.
-buildOutput :: VtyUserConfig -> WindowsSettings -> IO Output
-buildOutput config settings = do
+buildOutput :: TVar (Maybe DisplayRegion) -> VtyUserConfig -> WindowsSettings -> IO Output
+buildOutput screenSizeVar config settings = do
     let outHandle = settingOutputFd settings
         termName = settingTermName settings
 
@@ -42,10 +41,9 @@ buildOutput config settings = do
         Just m -> return m
 
     if isXtermLike termName
-        then XTermColor.reserveTerminal termName outHandle colorMode
+        then XTermColor.reserveTerminal screenSizeVar termName outHandle colorMode
         -- Not an xterm-like terminal. try for generic terminfo.
-        else TerminfoBased.reserveTerminal termName outHandle colorMode
-
+        else TerminfoBased.reserveTerminal screenSizeVar termName outHandle colorMode
 
 isXtermLike :: String -> Bool
 isXtermLike termName =

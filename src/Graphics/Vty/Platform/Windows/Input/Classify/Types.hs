@@ -21,6 +21,7 @@ data ClassifierState
     -- first argument and a reversed remainder of the chunks is collected in
     -- the second argument. At the end of the processing, the chunks are
     -- reversed and concatenated with the final chunk.
+  deriving (Show)
 
 -- | Description of parsed input sequences, including state for valid key,
 -- mouse, and window events plus invalid and partial events.
