@@ -16,14 +16,15 @@ import Graphics.Vty.Input.Events ( Event(EvResize), InternalEvent(InputEvent) )
 
 import Control.Concurrent (yield)
 import Control.Concurrent.STM ( TChan, atomically, writeTChan )
-import Control.Exception (try, SomeException(..))
+import Control.Exception (try, throw, SomeException(..))
 import Control.Monad (foldM)
 import Data.Bits ((.|.), (.&.), shiftL)
 import Codec.Binary.UTF8.String (encodeChar)
 import Data.Word (Word8)
 import Foreign.Storable (Storable(..))
 import GHC.Ptr ( Ptr )
-import System.IO ( Handle, hGetContents )
+import System.IO ( Handle, hSetBuffering, BufferMode(..), hSetEcho, hGetContents )
+import System.IO.Echo
 import System.Win32.Types ( HANDLE, withHandleToHANDLE, DWORD )
 import System.Win32.Console
 import System.Process (StdStream(..), createProcess, shell,
@@ -91,6 +92,7 @@ configureInput inputHandle isMintty = do
     if isMintty
     then do
       settings <- getSttySettings inputHandle
+      appendFile "C:\\temp\\debug.log" $ "configuring input. Settings: " ++ settings ++ "\n"
       return (configureStty "raw -echo" inputHandle, configureStty settings inputHandle)
     else do
         original <- getConsoleMode wh
@@ -99,6 +101,7 @@ configureInput inputHandle isMintty = do
               setConsoleMode wh original)
 
 -- | Commands to configure the @stty@ command-line utility.
+
 getSttySettings :: Handle -> IO String
 getSttySettings inputHandle = configureStty' "-g" inputHandle
 
@@ -110,6 +113,7 @@ configureStty params inputHandle = do
 
 configureStty' :: String -> Handle -> IO String
 configureStty' params inputHandle = do
+  appendFile "C:\\temp\\debug.log" "sttySettings\n"
   let stty = (shell $ "stty " ++ params) {
         std_in  = UseHandle inputHandle
       , std_out = CreatePipe

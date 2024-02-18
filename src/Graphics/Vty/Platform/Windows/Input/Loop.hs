@@ -45,7 +45,7 @@ import Data.Word (Word8)
 import Foreign (allocaArray)
 import Foreign.Ptr (Ptr, castPtr)
 import System.Environment (getEnv)
-import System.IO (Handle, hGetBufNonBlocking, hGetBufSome)
+import System.IO (Handle, hGetBufNonBlocking)
 
 data InputBuffer = InputBuffer
     { _ptr :: Ptr Word8
@@ -92,14 +92,11 @@ addBytesToProcess block = unprocessedBytes <>= block
 emit :: Event -> InputM ()
 emit event = do
     logMsg $ "parsed event: " ++ show event
+    liftIO $ appendFile "C:\\temp\\input.log" $ "parsed event: " ++ show event ++ "\n"
     case event of
       EvResize x y -> do
         screenVar <- use screenSizeVar
-        currentSize <- liftIO $ atomically $ readTVar screenVar
-        liftIO $ atomically $ writeTVar screenVar $ Just (x, y)
-        if currentSize /= Just (x, y)
-        then lift (asks eventChannel) >>= liftIO . atomically . flip writeTChan (InputEvent event)
-        else return ()
+        liftIO . atomically . writeTVar screenVar $ Just (x, y)
       _ -> lift (asks eventChannel) >>= liftIO . atomically . flip writeTChan (InputEvent event)
 
 -- Precondition: Under the threaded runtime. Only current use is from a
@@ -119,12 +116,12 @@ readFromDevice = do
         then BS.packCStringLen (castPtr bufferPtr, fromIntegral bytesRead)
         else return BS.empty
     unless (BS.null stringRep) $ logMsg $ "input bytes: " ++ show (BS8.unpack stringRep)
-    -- liftIO $ appendFile "C:\\temp\\input.log" $ show (BS8.unpack stringRep) ++ "\n"
+    liftIO $ appendFile "C:\\temp\\input.log" $ show (BS8.unpack stringRep) ++ "\n"
     return stringRep
     where
       readBufInternal chan winRecordPtr handle bufferPtr maxInputRecords isMintty = do
         if isMintty
-        then hGetBufSome handle bufferPtr maxInputRecords
+        then hGetBufNonBlocking handle bufferPtr maxInputRecords
         else readBuf chan winRecordPtr handle bufferPtr maxInputRecords
 
 parseEvent :: InputM Event
@@ -148,6 +145,7 @@ dropInvalid = do
     b <- use unprocessedBytes
     case c s b of
         Chunk -> do
+            liftIO $ appendFile "C:\\temp\\input.log" $ "Chunk, classifier state: " ++ show s
             classifierState .=
                 case s of
                   ClassifierStart -> ClassifierInChunk b []
@@ -155,12 +153,16 @@ dropInvalid = do
             unprocessedBytes .= BS8.empty
         Invalid -> do
             logMsg "dropping input bytes"
+            liftIO $ appendFile "C:\\temp\\input.log" $ "prefix: " ++ show (BS8.isPrefixOf (BS8.pack "\ESC[") b)
+            liftIO $ appendFile "C:\\temp\\input.log" $ "suffix: " ++ show (BS8.isSuffixOf (BS8.pack "t") b)
+            liftIO $ appendFile "C:\\temp\\input.log" $ "Invalid event, dropping input bytes: " ++ BS8.unpack b
             classifierState .= ClassifierStart
             unprocessedBytes .= BS8.empty
         _ -> return ()
 
 runInputProcessorLoop :: TVar (Maybe DisplayRegion) -> ClassifyMap -> Input -> Handle -> Bool -> IO ()
 runInputProcessorLoop screenVar classifyTable input handle isMintty = do
+    appendFile "C:\\temp\\loop.log" "runInputProcessorLoop\n"
     let bufferSize = 1024
     -- A key event could require 4 bytes of UTF-8.
     let maxKeyEvents = bufferSize `div` 4
@@ -188,11 +190,13 @@ initInput screenVar userConfig handle classifyTable isMintty = do
                    <*> maybe (return $ append mDefaultLog)
                              (return . appendFile)
                              (configDebugLog userConfig)
+    appendFile "C:\\temp\\debug.log" "Forking input thread\n"
     inputThread <- forkOSFinally (runInputProcessorLoop screenVar classifyTable input handle isMintty)
                                  (\_ -> putMVar stopSync ())
     let killAndWait = do
           killThread inputThread
           takeMVar stopSync
+    appendFile "C:\\temp\\debug.log" "Input thread created\n"
     return $ input { shutdownInput = killAndWait }
     where
         append mDebugLog msg =

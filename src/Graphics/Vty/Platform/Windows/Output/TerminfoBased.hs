@@ -10,40 +10,44 @@ module Graphics.Vty.Platform.Windows.Output.TerminfoBased
 where
 
 import Control.Concurrent.STM
-import Control.Concurrent (forkOS, killThread, threadDelay, newEmptyMVar, putMVar, takeMVar, myThreadId, ThreadId, MVar)
-import Control.Exception (mask, try, SomeException)
-import Control.Monad (when, void)
+import Control.Concurrent (forkOS, killThread, threadDelay, newEmptyMVar, putMVar, takeMVar, ThreadId)
+import Control.Exception (mask, try, catch, SomeException)
+import Control.Monad (when)
 import Data.Bits ((.&.))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
 import Data.ByteString.Internal (toForeignPtr)
+import Data.Terminfo.Parse
+    ( CapParam, CapExpression, parseCapExpression )
+import Data.Terminfo.Eval ( writeCapExpr )
+
+import Graphics.Vty.Attributes
+import Graphics.Vty.Image (DisplayRegion)
+import Graphics.Vty.DisplayAttributes
+import Graphics.Vty.Input
+import Graphics.Vty.Output
+import Graphics.Vty.Platform.Windows.WindowsCapabilities (getStringCapability)
+import Graphics.Vty.Platform.Windows.WindowsInterfaces (configureOutput, isEnvMintty)
+import Graphics.Vty.Platform.Windows.ScreenSize (getMinttyScreenSize)
+
+import Blaze.ByteString.Builder (Write, writeToByteString, writeStorable, writeWord8)
+
 import Data.IORef ( newIORef, readIORef, writeIORef )
 import Data.Maybe (isJust, isNothing, fromJust)
-import Data.Terminfo.Parse (CapParam, CapExpression, parseCapExpression)
-import Data.Terminfo.Eval (writeCapExpr)
-import Data.Word (Word8)
+import Data.Word ( Word8 )
 
 #if !MIN_VERSION_base(4,8,0)
 import Data.Foldable (foldMap)
 #endif
 
-import Graphics.Vty.Attributes
-import Graphics.Vty.Image (DisplayRegion)
-import Graphics.Vty.DisplayAttributes
-import Graphics.Vty.Output
-import Graphics.Vty.Platform.Windows.WindowsCapabilities (getStringCapability)
-import Graphics.Vty.Platform.Windows.WindowsInterfaces (configureOutput, isEnvMintty)
-
-import Blaze.ByteString.Builder (Write, writeToByteString, writeStorable, writeWord8)
-
 import Foreign.C.Types (CInt(..))
 import Foreign.ForeignPtr (withForeignPtr)
 import Foreign.Ptr (Ptr, plusPtr)
-import Foreign.StablePtr (newStablePtr)
 
-import System.IO (Handle, hPutBufNonBlocking, openFile, hClose, IOMode(..))
+import System.IO (Handle, hPutBufNonBlocking)
 import System.Win32.Types ( HANDLE, withHandleToHANDLE )
 import System.Win32.Console
+
 
 data TerminfoCaps = TerminfoCaps
     { smcup :: Maybe CapExpression
@@ -76,6 +80,35 @@ data DisplayAttrCaps = DisplayAttrCaps
     , enterBoldMode :: Maybe CapExpression
     }
 
+-- kinda like:
+-- https://code.google.com/p/vim/source/browse/src/fileio.c#10422
+-- fdWriteBuf will throw on error. Unless the error is EINTR. On EINTR
+-- the write will be retried.
+fdWriteAll :: Handle -> Ptr Word8 -> Int -> Int -> IO Int
+fdWriteAll outHandle ptr len count
+    | len <  0  = fail "fdWriteAll: len is less than 0"
+    | len == 0  = return count
+    | otherwise = do
+        writeCount <- fromEnum <$> hPutBufNonBlocking outHandle ptr (toEnum len)
+        let len' = len - writeCount
+            ptr' = ptr `plusPtr` writeCount
+            count' = count + writeCount
+        fdWriteAll outHandle ptr' len' count'
+
+sendCapToTerminal :: (BSC.ByteString -> IO ()) -> CapExpression -> [CapParam] -> IO ()
+sendCapToTerminal writeOut cap capParams = do
+    writeOut $ writeToByteString $ writeCapExpr cap capParams
+
+writeOutput :: Handle -> BSC.ByteString -> IO ()
+writeOutput outHandle outBytes = do
+  -- appendFile "C:\\temp\\debug.log" $ "bytes to stdout: " ++ show outBytes ++ "\n"
+  let (fptr, offset, len) = toForeignPtr outBytes
+  actualLen <- withForeignPtr fptr
+                $ \ptr -> fdWriteAll outHandle (ptr `plusPtr` offset) len 0
+  when (toEnum len /= actualLen) $ fail $ "Graphics.Vty.Output: outputByteBuffer "
+    ++ "length mismatch. " ++ show len ++ " /= " ++ show actualLen
+    ++ " Please report this bug to vty project."
+
 -- | Constructs an output driver that uses terminfo for all control
 -- codes. While this should provide the most compatible terminal,
 -- terminfo does not support some features that would increase
@@ -88,6 +121,10 @@ data DisplayAttrCaps = DisplayAttrCaps
 --    attributes.
 reserveTerminal :: TVar (Maybe DisplayRegion) -> String -> Handle -> ColorMode -> IO Output
 reserveTerminal screenVar termName outHandle colorMode = do
+    appendFile "C:\\temp\\debug.log" $ "reserveTerminal...\n"
+    isMintty <- isEnvMintty outHandle
+    restoreMode <- configureOutput outHandle isMintty
+
     -- assumes set foreground always implies set background exists.
     -- if set foreground is not set then all color changing style
     -- attributes are filtered.
@@ -101,7 +138,7 @@ reserveTerminal screenVar termName outHandle colorMode = do
                     Nothing -> (True, error $ "no fore color support for terminal " ++ termName)
         msetab = probeCap "setab"
         msetb = probeCap "setb"
-        setBackCap
+    let setBackCap
             = case msetab of
                 Just setab -> setab
                 Nothing -> case msetb of
@@ -110,11 +147,6 @@ reserveTerminal screenVar termName outHandle colorMode = do
 
     hyperlinkModeStatus <- newIORef False
     newAssumedStateRef <- newIORef initialAssumedState
-
-    outputChan <- atomically newTChan
-    stopOutputSync <- newEmptyMVar
-    outputThread <- forkOSFinally ((writeOutputLoop outHandle) outputChan)
-                                  (\_ -> putMVar stopOutputSync ())
 
     let terminfoSetMode m newStatus = do
           curStatus <- terminfoModeStatus m
@@ -147,140 +179,83 @@ reserveTerminal screenVar termName outHandle colorMode = do
             , ringBellAudio = probeCap "bel"
             }
 
-        writeOutput = writeOutput' outputChan
-        sendCap s = sendCapToTerminal writeOutput (s terminfoCaps)
+        sendCap s = sendCapToTerminal (writeOutput outHandle) (s terminfoCaps)
         maybeSendCap s = when (isJust $ s terminfoCaps) . sendCap (fromJust . s)
 
+    appendFile "C:\\temp\\debug.log" "Forking screen size thread\n"
     stopSync <- newEmptyMVar
-    screenSizeThread <- forkOSFinally (getScreenSizeLoop writeOutput)
-                                      (\_ -> putMVar stopSync ())
+    screenSizeThread <- forkOSFinally (getScreenSizeLoop (writeOutput outHandle))
+                                        (\_ -> putMVar stopSync ())
+    let killAndWait = do
+          killThread screenSizeThread
+          takeMVar stopSync
 
-    isMintty <- isEnvMintty outHandle
-    restoreMode <- configureOutput outHandle isMintty
-
-    let releaseAction = do
+        releaseAction = do
           sendCap setDefaultAttr []
           maybeSendCap cnorm []
           restoreMode
-          killAndWait screenSizeThread stopSync
-          killAndWait outputThread stopOutputSync
+          killAndWait
 
-    return Output
-      { terminalID = termName
-      , releaseTerminal = releaseAction
-      , supportsBell = return $ isJust $ ringBellAudio terminfoCaps
-      , supportsItalics = return $ isJust (enterItalic (displayAttrCaps terminfoCaps)) &&
-                                    isJust (exitItalic (displayAttrCaps terminfoCaps))
-      , supportsStrikethrough = return $ isJust (enterStrikethrough (displayAttrCaps terminfoCaps)) &&
-                                          isJust (exitStrikethrough (displayAttrCaps terminfoCaps))
-      , ringTerminalBell = maybeSendCap ringBellAudio []
-      , reserveDisplay = do
-          -- If there is no support for smcup: Clear the screen
-          -- and then move the mouse to the home position to
-          -- approximate the behavior.
-          maybeSendCap smcup []
-          sendCap clearScreen []
-      , releaseDisplay = do
-          maybeSendCap rmcup []
-          maybeSendCap cnorm []
-      , setDisplayBounds = \(w, h) -> setWindowSize writeOutput outHandle isMintty (w, h)
-      , displayBounds = do
-          rawSize <- getWindowSize outHandle screenVar isMintty
-          appendFile "C:\\temp\\debug.log" $ "getting displayBounds: " ++ show rawSize ++ "\n"
-          case rawSize of
-              (w, h)  | w < 0 || h < 0 -> fail $ "getwinsize returned < 0 : " ++ show rawSize
-                      | otherwise      -> return (w,h)
-      , outputByteBuffer = writeOutput
-      , supportsCursorVisibility = isJust $ civis terminfoCaps
-      , supportsMode = terminfoModeSupported
-      , setMode = terminfoSetMode
-      , getModeStatus = terminfoModeStatus
-      , assumedStateRef = newAssumedStateRef
-      , outputColorMode = colorMode
-      -- I think fix would help assure tActual is the only
-      -- reference. I was having issues tho.
-      , mkDisplayContext = (`terminfoDisplayContext` terminfoCaps)
-      , setOutputWindowTitle = const $ return ()
-      }
-
-killAndWait :: ThreadId -> MVar () -> IO ()
-killAndWait threadId syncVar = do
-  killThread threadId
-  takeMVar syncVar
+    let t = Output
+            { terminalID = termName
+            , releaseTerminal = releaseAction
+            , supportsBell = return $ isJust $ ringBellAudio terminfoCaps
+            , supportsItalics = return $ isJust (enterItalic (displayAttrCaps terminfoCaps)) &&
+                                         isJust (exitItalic (displayAttrCaps terminfoCaps))
+            , supportsStrikethrough = return $ isJust (enterStrikethrough (displayAttrCaps terminfoCaps)) &&
+                                               isJust (exitStrikethrough (displayAttrCaps terminfoCaps))
+            , ringTerminalBell = maybeSendCap ringBellAudio []
+            , reserveDisplay = do
+                -- If there is no support for smcup: Clear the screen
+                -- and then move the mouse to the home position to
+                -- approximate the behavior.
+                maybeSendCap smcup []
+                sendCap clearScreen []
+            , releaseDisplay = do
+                maybeSendCap rmcup []
+                maybeSendCap cnorm []
+            , setDisplayBounds = \(w, h) ->
+                setWindowSize t outHandle isMintty (w, h)
+            , displayBounds = do
+                rawSize <- getWindowSize outHandle screenVar isMintty
+                appendFile "C:\\temp\\debug.log" $ "getting displayBounds: " ++ show rawSize ++ "\n"
+                case rawSize of
+                    (w, h)  | w < 0 || h < 0 -> fail $ "getwinsize returned < 0 : " ++ show rawSize
+                            | otherwise      -> return (w,h)
+            , outputByteBuffer = writeOutput outHandle
+            , supportsCursorVisibility = isJust $ civis terminfoCaps
+            , supportsMode = terminfoModeSupported
+            , setMode = terminfoSetMode
+            , getModeStatus = terminfoModeStatus
+            , assumedStateRef = newAssumedStateRef
+            , outputColorMode = colorMode
+            -- I think fix would help assure tActual is the only
+            -- reference. I was having issues tho.
+            , mkDisplayContext = (`terminfoDisplayContext` terminfoCaps)
+            , setOutputWindowTitle = const $ return ()
+            }
+    return t
 
 forkOSFinally :: IO a -> (Either SomeException a -> IO ()) -> IO ThreadId
 forkOSFinally action and_then =
   mask $ \restore -> forkOS $ try (restore action) >>= and_then
 
-writeOutput' :: TChan BSC.ByteString -> BSC.ByteString -> IO ()
-writeOutput' outputChan bytes = do
-  atomically $ writeTChan outputChan bytes
-
-writeOutputLoop :: Handle -> TChan BSC.ByteString -> IO ()
-writeOutputLoop outHandle outputChan = do
-  void $ newStablePtr =<< myThreadId
-  bytes <- atomically $ readTChan outputChan
-  writeOutput bytes
-  writeOutputLoop outHandle outputChan
-  where
-    writeOutput :: BSC.ByteString -> IO ()
-    writeOutput outBytes = do
-      let (fptr, offset, len) = toForeignPtr outBytes
-      actualLen <- withForeignPtr fptr
-                    $ \ptr -> fdWriteAll (ptr `plusPtr` offset) len 0
-      when (toEnum len /= actualLen) $ fail $ "Graphics.Vty.Output: outputByteBuffer "
-        ++ "length mismatch. " ++ show len ++ " /= " ++ show actualLen
-        ++ " Please report this bug to vty project."
-
-    -- kinda like:
-    -- https://code.google.com/p/vim/source/browse/src/fileio.c#10422
-    -- fdWriteBuf will throw on error. Unless the error is EINTR. On EINTR
-    -- the write will be retried.
-    fdWriteAll :: Ptr Word8 -> Int -> Int -> IO Int
-    fdWriteAll ptr len count
-        | len <  0  = fail "fdWriteAll: len is less than 0"
-        | len == 0  = return count
-        | otherwise = do
-            writeCount <- fromEnum <$> hPutBufNonBlocking outHandle ptr (toEnum len)
-            let len' = len - writeCount
-                ptr' = ptr `plusPtr` writeCount
-                count' = count + writeCount
-            fdWriteAll ptr' len' count'
-
-writeToFile :: FilePath -> BS.ByteString -> IO ()
-writeToFile filepath bytes = do
-  handle <- openFile filepath AppendMode
-  BS.hPut handle bytes
-  hClose handle
-
 getScreenSizeLoop :: (BSC.ByteString -> IO()) -> IO ()
 getScreenSizeLoop writeOut = do
-  appendFile "C:\\temp\\debug.log" "getScreenSize...\n"
-  writeOut (BSC.pack "\ESC[18t")
+  -- appendFile "C:\\temp\\debug.log" "getScreenSizeLoop\n"
+  getMinttyScreenSize writeOut
   threadDelay 500000
   getScreenSizeLoop writeOut
 
--- foreign import ccall "gwinsz.h vty_c_get_window_size" c_getWindowSize :: CInt -> IO CLong
-
--- getWindowSize :: IO (Int, Int)
--- getWindowSize = do
---   myfd <- FD.handleToFd FD.stdout
---   (a, b) <- (`divMod` 65536) `fmap` (c_getWindowSize $ FD.fdFD myfd)
---   return (fromIntegral b, fromIntegral a)
-
-sendCapToTerminal :: (BSC.ByteString -> IO ()) -> CapExpression -> [CapParam] -> IO ()
-sendCapToTerminal writeOut cap capParams = do
-    writeOut $ writeToByteString $ writeCapExpr cap capParams
-
 requireCap :: String -> CapExpression
-requireCap capName =
-  case getStringCapability capName of
+requireCap capName
+    = case getStringCapability capName of
         Nothing     -> error $ "Terminal does not define required capability \"" ++ capName ++ "\""
         Just capStr -> parseCap capStr
 
 probeCap :: String -> Maybe CapExpression
-probeCap capName =
-  case getStringCapability capName of
+probeCap capName
+    = case getStringCapability capName of
         Nothing     -> Nothing
         Just capStr -> Just $ parseCap capStr
 
@@ -307,19 +282,17 @@ currentDisplayAttrCaps
     , enterBoldMode = probeCap "bold"
     }
 
+
 -- Report terminal size: "\ESC[18t"
--- Response sent to stdin, format of response: "\ESC8;YY;XXt"
+-- Response sent to stdin, format of response: "\ESC;55;140t"
 getWindowSize :: Handle -> TVar (Maybe DisplayRegion) -> Bool -> IO (Int, Int)
 getWindowSize outHandle screenVar isMintty = do
   if isMintty
   then do
-    -- myfd <- FD.handleToFd FD.stdout
-    -- (a, b) <- (`divMod` 65536) `fmap` (c_getWindowSize $ FD.fdFD myfd)
-    -- return (fromIntegral b, fromIntegral a)
-    screenSize <- atomically $ readTVar screenVar
+    screenSize <- atomically $ readTVar $ screenVar
     appendFile "C:\\temp\\debug.log" $ "reading window size... size is: " ++ show screenSize
     case screenSize of
-      Nothing -> return (100, 100) -- use a default size? this is dubious
+      Nothing -> return (100, 100)
       Just theSize -> return theSize
   else do
     bufferInfo <- withHandleToHANDLE outHandle getConsoleScreenBufferInfo
@@ -330,12 +303,12 @@ foreign import ccall "set_screen_size" cSetScreenSize :: CInt -> CInt -> HANDLE 
 
 -- | Resize the console window to the specified size. Throws error on failure.
 -- Mintty: "\e[8;35;100t";
-setWindowSize :: (BSC.ByteString -> IO ()) -> Handle -> Bool -> (Int, Int) -> IO ()
-setWindowSize writeOut hOut isMintty (w, h) = 
+setWindowSize :: Output -> Handle -> Bool -> (Int, Int) -> IO ()
+setWindowSize output hOut isMintty (w, h) = 
   if isMintty
   then do
     let buf = BSC.pack $ "\ESC[8;" ++ show w ++ ";" ++ show h
-    writeOut buf
+    outputByteBuffer output buf
   else do
     result <- withHandleToHANDLE hOut $ cSetScreenSize (fromIntegral w) (fromIntegral h)
     if result == 0

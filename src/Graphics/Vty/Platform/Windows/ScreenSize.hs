@@ -1,30 +1,31 @@
 {-# LANGUAGE CPP #-}
 
 module Graphics.Vty.Platform.Windows.ScreenSize
-  (isScreenSizeEvent, classifyScreenSize) where
+  (getMinttyScreenSize, isScreenSizeEvent, classifyScreenSize) where
 
-import Control.Monad (when)
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as BSC
+import Control.Concurrent.STM (TChan, atomically, readTChan)
+import Control.Monad (void, when)
+import qualified Data.ByteString.Char8 as BS8
+import Data.ByteString.Char8 (ByteString)
 import Graphics.Vty.Platform.Windows.Input.Classify.Types
     ( KClass(..) )
 import Graphics.Vty.Platform.Windows.Input.Classify.Parse
-import Graphics.Vty.Input.Events (Event(..))
--- import System.IO.FD
+import Graphics.Vty.Input.Events (InternalEvent(..), Event(..))
+import Graphics.Vty.Output (Output(..))
+import qualified Text.Parsec as P
+import qualified Text.Parsec.ByteString as P
+-- import GHC.IO.Handle.FD
+-- import GHC.IO.FD
+-- import System.IO (Handle)
+-- import Foreign.C.Types (CInt(..), CLong(..))
 
--- Options to get screen size in mintty terminals:
--- 1 - Send cap expression '\ESC[18t', parse the response with format '\ESC[8;YY;XXt'
--- 2 - Set cursor position to 999,999, then send 'report cursor' sequence and parse the response with format '\ESC[YY;XXR'
--- 3 - Use ioctl interface to read the TIOCGWINSZ struct.
-        -- Apparently mingw does not include ioctl header file or implementation. I can't get the c_getWindowSize function to compile. 
-        -- Error is 'can't find ioctl.h'
 
 -- foreign import ccall "gwinsz.h vty_c_get_window_size" c_getWindowSize :: Fd -> IO CLong
 
--- getWindowSize :: IO (Int, Int)
--- getWindowSize = do
---   (a,b) <- (`divMod` 65536) `fmap` c_getWindowSize stdout
---   return (fromIntegral b, fromIntegral a)
+-- getWindowSize :: Fd -> IO (Int,Int)
+-- getWindowSize fd = do
+--     (a,b) <- (`divMod` 65536) `fmap` c_getWindowSize fd
+--     return (fromIntegral b, fromIntegral a)
 
 -- foreign import ccall "gwinsz.h vty_c_set_window_size" c_setWindowSize :: Fd -> CLong -> IO ()
 
@@ -34,14 +35,14 @@ import Graphics.Vty.Input.Events (Event(..))
 --     c_setWindowSize fd $ fromIntegral val
 
 
-isScreenSizeEvent :: BS.ByteString -> Bool 
-isScreenSizeEvent bytes = BSC.isPrefixOf csiPrefix bytes && BSC.isSuffixOf (BSC.pack "t") bytes
+isScreenSizeEvent :: ByteString -> Bool 
+isScreenSizeEvent bytes = BS8.isPrefixOf csiPrefix bytes && BS8.isSuffixOf (BS8.pack "t") bytes
 
-csiPrefix :: BS.ByteString
-csiPrefix = BSC.pack "\ESC["
+csiPrefix :: ByteString
+csiPrefix = BS8.pack "\ESC["
 
 -- | Attempt to classify an input string as a screen size event.
-classifyScreenSize :: BS.ByteString -> KClass
+classifyScreenSize :: ByteString -> KClass
 classifyScreenSize s = runParser s $ do
     when (not $ isScreenSizeEvent s) failParse
 
@@ -56,3 +57,45 @@ classifyScreenSize s = runParser s $ do
     case ty of
         't' -> return $ EvResize width height
         _   -> failParse
+
+getMinttyScreenSize :: (ByteString -> IO()) -> IO ()
+getMinttyScreenSize writeOutput = do
+  appendFile "C:\\temp\\debug.log" $ "getScreenSize...\n"
+  let buf = BS8.pack "\ESC[18t"
+  writeOutput buf
+  -- return (100, 100)
+  -- internalEvent <- atomically $ readTChan inputChannel
+  -- case internalEvent of
+  --   InputEvent evt ->
+  --     case evt of
+  --       EvResize x y -> return (x, y)
+  --       e            -> error $ "unexpected event received: " ++ show e
+  --   _     -> error "unexpected resume event received"
+
+parseScreenSizeEvent :: ByteString -> Maybe (Int, Int)
+parseScreenSizeEvent bytes =
+  case (P.parse screenSizeParser "" bytes) of
+            Left err  -> error $ show err
+            Right res  -> Just res
+
+screenSizeParser :: P.Parser (Int, Int)
+screenSizeParser = do
+    void $ P.char '\ESC'
+    void $ P.char '['
+    rows <- numDefaultOne
+    void $ P.char ';'
+    cols <- numDefaultOne
+    void $ P.char 't'
+    return (rows, cols)
+
+numDefaultOne :: P.Parser Int
+numDefaultOne = do
+    n <- P.many P.digit
+    case length n of
+      0 -> return 1
+      _ -> return $ read n
+
+-- Options to get screen size in mintty terminals:
+-- Send cap expression '\ESC[18t', parse the response with format '\ESC[YY;XXt'
+-- Set cursor position to 999,999, then send 'report cursor' sequence and parse the response with format '\ESC[YY;XXR'
+-- Use ioctl interface to read the TIOCGWINSZ structure.
