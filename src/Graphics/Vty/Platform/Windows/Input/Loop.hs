@@ -173,16 +173,22 @@ initInput userConfig handle classifyTable = do
                              (return . appendFile)
                              (configDebugLog userConfig)
     inputThread <- forkOSFinally (runInputProcessorLoop classifyTable input handle)
-                                 (\_ -> putMVar stopSync ())
+                                 (freeTheVarOrLog mDefaultLog stopSync)
     let killAndWait = do
           killThread inputThread
           takeMVar stopSync
     return $ input { shutdownInput = killAndWait }
     where
-        append mDebugLog msg =
-          case mDebugLog of
-            Just debugLog -> appendFile debugLog $ msg ++ "\n"
-            Nothing       -> return ()
+      freeTheVarOrLog mDefaultLog stopSync result = do
+        case result of
+          Left e -> append mDefaultLog $ "Caught error on input thread: " ++ show e
+          Right _ -> putMVar stopSync ()
+        return ()
+
+      append mDebugLog msg =
+        case mDebugLog of
+          Just debugLog -> appendFile debugLog $ msg ++ "\n"
+          Nothing       -> return ()
 
 forkOSFinally :: IO a -> (Either SomeException a -> IO ()) -> IO ThreadId
 forkOSFinally action and_then =
