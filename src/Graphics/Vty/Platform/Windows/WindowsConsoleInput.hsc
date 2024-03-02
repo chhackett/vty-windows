@@ -154,23 +154,23 @@ instance Storable WinConsoleInputEvent where
     alignment _ = #alignment INPUT_RECORD
 
     poke buf (KeyEventRecordU key) = do
-        (#poke INPUT_RECORD, EventType) buf (#{const KEY_EVENT} :: DWORD)
+        (#poke INPUT_RECORD, EventType) buf (#{const KEY_EVENT} :: WORD)
         (#poke INPUT_RECORD, Event) buf key
     poke buf (MouseEventRecordU mouse) = do
-        (#poke INPUT_RECORD, EventType) buf (#{const MOUSE_EVENT} :: DWORD)
+        (#poke INPUT_RECORD, EventType) buf (#{const MOUSE_EVENT} :: WORD)
         (#poke INPUT_RECORD, Event) buf mouse
     poke buf (WindowBufferSizeRecordU window) = do
-        (#poke INPUT_RECORD, EventType) buf (#{const WINDOW_BUFFER_SIZE_EVENT} :: DWORD)
+        (#poke INPUT_RECORD, EventType) buf (#{const WINDOW_BUFFER_SIZE_EVENT} :: WORD)
         (#poke INPUT_RECORD, Event) buf window
     poke buf (MenuEventRecordU menu) = do
-        (#poke INPUT_RECORD, EventType) buf (#{const MENU_EVENT} :: DWORD)
+        (#poke INPUT_RECORD, EventType) buf (#{const MENU_EVENT} :: WORD)
         (#poke INPUT_RECORD, Event) buf menu
     poke buf (FocusEventRecordU focus) = do
-        (#poke INPUT_RECORD, EventType) buf (#{const FOCUS_EVENT} :: DWORD)
+        (#poke INPUT_RECORD, EventType) buf (#{const FOCUS_EVENT} :: WORD)
         (#poke INPUT_RECORD, Event) buf focus
 
     peek buf = do
-        event <- (#peek INPUT_RECORD, EventType) buf :: IO DWORD
+        event <- (#peek INPUT_RECORD, EventType) buf :: IO WORD
         case event of
           #{const KEY_EVENT} ->
               KeyEventRecordU `fmap` (#peek INPUT_RECORD, Event) buf
