@@ -170,7 +170,7 @@ instance Storable WinConsoleInputEvent where
         (#poke INPUT_RECORD, Event) buf focus
 
     peek buf = do
-        event <- (#peek INPUT_RECORD, EventType) buf :: IO DWORD
+        event <- (#peek INPUT_RECORD, EventType) buf :: IO WORD
         case event of
           #{const KEY_EVENT} ->
               KeyEventRecordU `fmap` (#peek INPUT_RECORD, Event) buf
