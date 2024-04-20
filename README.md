@@ -46,17 +46,20 @@ cabal install vty-windows
 
 # Platform Support
 
-**Important Note**
+`vty-windows` has been tested and all features are supported in the following terminals:
+* Command Prompt
+* Powershell
+* MSYS/MSYS2
+* ConEmu
+Other terminals have not been tested at this time. Bug reports are welcome!
+
+# Notes
 Developers that want to develop cross platform applications using the vty
 library should directly depend on [vty-crossplatform]
 (https://github.com/jtdaugherty/vty-crossplatform), and not this library.
 
 If you wish to only target the Windows platform, then using vty-windows would
 be the correct approach.
-
-Currently, only the Command Prompt and Powershell terminals are the only fully
-supported terminals. Other terminals, such as mintty, Alacritty, ConEmu, etc,
-have varying levels of support. Bug reports are welcome!
 
 # Contributing
 
