@@ -51,9 +51,11 @@ cabal install vty-windows
 * Powershell
 * MSYS/MSYS2
 * ConEmu
+
 Other terminals have not been tested at this time. Bug reports are welcome!
 
 # Notes
+
 Developers that want to develop cross platform applications using the vty
 library should directly depend on [vty-crossplatform]
 (https://github.com/jtdaugherty/vty-crossplatform), and not this library.
@@ -71,10 +73,6 @@ should consider to make submitting patches easier for all concerned:
  - If you make changes, make them consistent with the syntactic
    conventions already used in the codebase.
  - Please provide Haddock documentation for any changes you make.
-
-# Known Issues
-
-In Powershell, foreground and background colors may render incorrectly.
 
 # Further Reading
 
