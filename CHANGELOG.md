@@ -30,3 +30,12 @@ Package changes:
 -------
 * On shutdown, make sure to shut down output interface before shutting down input interface.
   Fixes mouse reset bug.
+
+0.2.0.2
+-------
+* Fixed bug in processing response of the ReadConsoleInputW that caused vty-windows to crash.
+
+0.2.0.3
+-------
+* Now vty-windows supports running in MSYS/MSYS2 terminals. This was achieved by modifying
+  the way the input and output buffers are initialized.

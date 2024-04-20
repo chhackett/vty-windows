@@ -10,19 +10,20 @@ module Graphics.Vty.Platform.Windows.WindowsInterfaces
 #include "windows_cconv.h"
 
 import Graphics.Vty.Platform.Windows.WindowsConsoleInput
-import Graphics.Vty.Input.Events ( Event(EvResize), InternalEvent(InputEvent) )
+import Graphics.Vty.Input.Events (Event(EvResize), InternalEvent(InputEvent))
 
-import Control.Concurrent (yield)
-import Control.Concurrent.STM ( TChan, atomically, writeTChan )
-import Control.Monad (foldM)
-import Data.Bits ((.|.), (.&.), shiftL)
 import Codec.Binary.UTF8.String (encodeChar)
+import Control.Concurrent (yield)
+import Control.Concurrent.STM (TChan, atomically, writeTChan)
+import Control.Monad (foldM, when)
+import Data.Bits ((.|.), (.&.), shiftL)
 import Data.Word (Word8)
 import Foreign.Storable (Storable(..))
-import GHC.Ptr ( Ptr )
-import System.IO ( Handle )
-import System.Win32.Types ( HANDLE, withHandleToHANDLE, DWORD )
+import GHC.Ptr (Ptr)
+import System.IO (Handle)
+import System.Win32.Types (DWORD, HANDLE, withHandleToHANDLE, iNVALID_HANDLE_VALUE) 
 import System.Win32.Console
+import System.Win32.File hiding (copyFile)
 
 foreign import ccall "windows.h WaitForSingleObject" c_WaitForSingleObject :: HANDLE -> DWORD -> IO DWORD
 
@@ -77,21 +78,26 @@ readBuf' eventChannel inputEventPtr handle bufferPtr maxInputRecords = do
             mapM_ (\(w, offset') -> pokeElemOff bufferPtr (offset + offset') w) $ zip utf8Char [0..]
             return (offset + length utf8Char, Nothing)
 
-
 -- | Configure Windows to correctly handle input for a Vty application
 configureInput :: Handle -> IO (IO (), IO ())
-configureInput inputHandle = do
-    withHandleToHANDLE inputHandle $ \wh -> do
-        original <- getConsoleMode wh
-        let setMode = setConsoleMode wh $ eNABLE_VIRTUAL_TERMINAL_INPUT .|. eNABLE_EXTENDED_FLAGS
-        pure (setMode,
-              setConsoleMode wh original)
+configureInput _ = do
+    inHandle <- configureHandle "CONIN$"
+    original <- getConsoleMode inHandle
+    let setMode = setConsoleMode inHandle $ eNABLE_VIRTUAL_TERMINAL_INPUT .|. eNABLE_EXTENDED_FLAGS
+    pure (setMode, setConsoleMode inHandle original)
 
 -- | Configure Windows to correctly handle output for a Vty application
 configureOutput :: Handle -> IO (IO ())
-configureOutput outputHandle = do
-    withHandleToHANDLE outputHandle $ \wh -> do
-        original <- getConsoleMode wh
-        setConsoleOutputCP 65001
-        setConsoleMode wh $ eNABLE_VIRTUAL_TERMINAL_PROCESSING .|. eNABLE_PROCESSED_OUTPUT
-        pure (setConsoleMode wh original)
+configureOutput _ = do
+    outHandle <- configureHandle "CONOUT$"
+    original <- getConsoleMode outHandle
+    setConsoleOutputCP 65001
+    setConsoleMode outHandle $ eNABLE_VIRTUAL_TERMINAL_PROCESSING .|. eNABLE_PROCESSED_OUTPUT
+    pure (setConsoleMode outHandle original)
+
+configureHandle :: String -> IO HANDLE
+configureHandle handleName = do
+    outHandle <- createFile handleName (gENERIC_WRITE .|. gENERIC_READ)
+      fILE_SHARE_WRITE Nothing oPEN_EXISTING 0 Nothing
+    when (outHandle == iNVALID_HANDLE_VALUE) $ fail $ "Unable to configure terminal for input/output with handle: " ++ handleName
+    return outHandle
