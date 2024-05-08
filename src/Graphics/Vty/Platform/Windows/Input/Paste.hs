@@ -2,17 +2,16 @@
 --
 -- http://cirw.in/blog/bracketed-paste
 module Graphics.Vty.Platform.Windows.Input.Paste
-  ( parseBracketedPaste
-  , bracketedPasteStarted
-  , bracketedPasteFinished
+  ( parseBracketedPaste,
+    bracketedPasteStarted,
+    bracketedPasteFinished,
   )
 where
 
-import qualified Data.ByteString.Char8 as BS8
 import Data.ByteString.Char8 (ByteString)
-
-import Graphics.Vty.Input.Events
-import Graphics.Vty.Platform.Windows.Input.Classify.Types
+import qualified Data.ByteString.Char8 as BS8
+import Graphics.Vty.Input.Events (Event (..))
+import Graphics.Vty.Platform.Windows.Input.Classify.Types (KClass (..))
 
 bracketedPasteStart :: ByteString
 bracketedPasteStart = BS8.pack "\ESC[200~"
@@ -33,9 +32,9 @@ bracketedPasteFinished = BS8.isInfixOf bracketedPasteEnd
 -- 'True'.
 parseBracketedPaste :: ByteString -> KClass
 parseBracketedPaste s =
-    Valid (EvPaste p) (BS8.drop endLen rest')
-    where
-        startLen = BS8.length bracketedPasteStart
-        endLen   = BS8.length bracketedPasteEnd
-        (_, rest ) = BS8.breakSubstring bracketedPasteStart s
-        (p, rest') = BS8.breakSubstring bracketedPasteEnd . BS8.drop startLen $ rest
+  Valid (EvPaste p) (BS8.drop endLen rest')
+  where
+    startLen = BS8.length bracketedPasteStart
+    endLen = BS8.length bracketedPasteEnd
+    (_, rest) = BS8.breakSubstring bracketedPasteStart s
+    (p, rest') = BS8.breakSubstring bracketedPasteEnd . BS8.drop startLen $ rest

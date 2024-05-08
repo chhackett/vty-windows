@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, CPP #-}
+{-# LANGUAGE CPP #-}
 
 -- | This module provides the input layer for Vty, including methods
 -- for initializing an 'Input' structure and reading 'Event's from the
@@ -112,19 +112,19 @@
 --
 -- * http://www.leonerd.org.uk/hacks/fixterms/
 module Graphics.Vty.Platform.Windows.Input
-  ( buildInput
+  ( buildInput,
   )
 where
 
-import Graphics.Vty.Config ( VtyUserConfig(..) )
-import Graphics.Vty.Input ( Input(restoreInputState, shutdownInput) )
-import Graphics.Vty.Platform.Windows.Input.Loop ( initInput )
-import Graphics.Vty.Platform.Windows.Input.Terminfo ( classifyMapForTerm )
+import Data.Maybe (isNothing)
+import Graphics.Vty.Config (VtyUserConfig (..))
+import Graphics.Vty.Input (Input (..))
+import Graphics.Vty.Platform.Windows.Input.Loop (initInput)
+import Graphics.Vty.Platform.Windows.Input.Terminfo (classifyMapForTerm)
 import Graphics.Vty.Platform.Windows.Settings
-    ( WindowsSettings(settingInputFd, settingTermName) )
-import Graphics.Vty.Platform.Windows.WindowsInterfaces ( configureInput )
-
-import Data.Maybe ( isNothing )
+  ( WindowsSettings (..),
+  )
+import Graphics.Vty.Platform.Windows.WindowsInterfaces (configureInput)
 
 -- | Set up the terminal with file descriptor `inputFd` for input.
 -- Returns an 'Input'.
@@ -137,18 +137,19 @@ import Data.Maybe ( isNothing )
 -- 'attributeControl' function.
 buildInput :: VtyUserConfig -> WindowsSettings -> IO Input
 buildInput userConfig settings = do
-    let tName = settingTermName settings
-        handle = settingInputFd settings
+  let tName = settingTermName settings
+      handle = settingInputFd settings
 
-    let inputOverrides = [(s,e) | (t,s,e) <- configInputMap userConfig, isNothing t || t == Just tName]
-        activeInputMap = classifyMapForTerm `mappend` inputOverrides
-    (setAttrs, unsetAttrs) <- configureInput handle
-    setAttrs
-    input <- initInput userConfig handle activeInputMap
+  let inputOverrides = [(s, e) | (t, s, e) <- configInputMap userConfig, isNothing t || t == Just tName]
+      activeInputMap = classifyMapForTerm `mappend` inputOverrides
+  (setAttrs, unsetAttrs) <- configureInput handle
+  setAttrs
+  input <- initInput userConfig handle activeInputMap
 
-    return $ input
-        { shutdownInput = do
-            shutdownInput input
-            unsetAttrs
-        , restoreInputState = restoreInputState input >> unsetAttrs
-        }
+  return $
+    input
+      { shutdownInput = do
+          shutdownInput input
+          unsetAttrs,
+        restoreInputState = restoreInputState input >> unsetAttrs
+      }

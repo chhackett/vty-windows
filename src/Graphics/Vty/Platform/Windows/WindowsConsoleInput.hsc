@@ -11,10 +11,10 @@ module Graphics.Vty.Platform.Windows.WindowsConsoleInput
      readConsoleInput) where
 
 import Control.Monad (foldM)
-import Foreign.C.Types ( CWchar(..) )
+import Foreign.C.Types (CWchar(..))
 import Foreign.Marshal.Alloc (alloca)
 import Foreign.Storable (Storable(..))
-import GHC.Ptr ( Ptr )
+import GHC.Ptr (Ptr)
 import System.Win32.Console
 import System.Win32.Types
 import System.IO (Handle)

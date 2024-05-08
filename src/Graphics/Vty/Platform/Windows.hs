@@ -8,7 +8,7 @@ module Graphics.Vty.Platform.Windows
   )
 where
 
-import Control.Concurrent.STM
+import Control.Concurrent.STM ( atomically, newTVarIO, readTVarIO, swapTVar )
 import Control.Monad ( when, unless )
 
 import Graphics.Vty ( Vty(..), installCustomWidthTable, mkVtyFromPair )

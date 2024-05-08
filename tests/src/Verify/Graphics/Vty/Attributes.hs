@@ -37,10 +37,12 @@ allStyles =
     , blink
     , dim
     , bold
+    , italic
+    , strikethrough
     ]
 
 -- Limit the possible attributes to just a few for now.
-possibleAttrMods :: [ AttrOp ]
+possibleAttrMods :: [AttrOp]
 possibleAttrMods =
     [ idOp
     ] ++ map setForeColorOp allColors

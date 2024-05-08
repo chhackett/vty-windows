@@ -3,23 +3,21 @@
 --
 -- http://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h2-Mouse-Tracking
 module Graphics.Vty.Platform.Windows.Input.Mouse
-  ( requestMouseEvents
-  , disableMouseEvents
-  , isMouseEvent
-  , classifyMouseEvent
+  ( requestMouseEvents,
+    disableMouseEvents,
+    isMouseEvent,
+    classifyMouseEvent,
   )
 where
 
-import Graphics.Vty.Input.Events
-import Graphics.Vty.Platform.Windows.Input.Classify.Types
-import Graphics.Vty.Platform.Windows.Input.Classify.Parse
-
 import Control.Monad
-import Data.Maybe (catMaybes)
 import Data.Bits ((.&.))
-
-import qualified Data.ByteString.Char8 as BS8
 import Data.ByteString.Char8 (ByteString)
+import qualified Data.ByteString.Char8 as BS8
+import Data.Maybe (catMaybes)
+import Graphics.Vty.Input.Events
+import Graphics.Vty.Platform.Windows.Input.Classify.Parse
+import Graphics.Vty.Platform.Windows.Input.Classify.Types
 
 -- A mouse event in SGR extended mode is
 --
@@ -27,9 +25,13 @@ import Data.ByteString.Char8 (ByteString)
 --
 -- where
 --
+
 -- * B is the number with button and modifier bits set,
+
 -- * X is the X coordinate of the event starting at 1
+
 -- * Y is the Y coordinate of the event starting at 1
+
 -- * the final character is 'M' for a press, 'm' for a release
 
 -- | These sequences set xterm-based terminals to send mouse event
@@ -92,72 +94,74 @@ hasBitSet val bit = val .&. bit > 0
 -- | Attempt to classify an input string as a mouse event.
 classifyMouseEvent :: ByteString -> KClass
 classifyMouseEvent s = runParser s $ do
-    when (not $ isMouseEvent s) failParse
+  unless (isMouseEvent s) failParse
 
-    expectChar '\ESC'
-    expectChar '['
-    ty <- readChar
-    case ty of
-        '<' -> classifySGRMouseEvent
-        'M' -> classifyNormalMouseEvent
-        _   -> failParse
+  expectChar '\ESC'
+  expectChar '['
+  ty <- readChar
+  case ty of
+    '<' -> classifySGRMouseEvent
+    'M' -> classifyNormalMouseEvent
+    _ -> failParse
 
 -- Given a modifier/button value, determine which button was indicated
 getSGRButton :: Int -> Parser Button
 getSGRButton mods =
-    let buttonMap = [ (leftButton,   BLeft)
-                    , (middleButton, BMiddle)
-                    , (rightButton,  BRight)
-                    , (scrollUp,     BScrollUp)
-                    , (scrollDown,   BScrollDown)
-                    ]
-    in case lookup (mods .&. buttonMask) buttonMap of
-        Nothing -> failParse
-        Just b -> return b
+  let buttonMap =
+        [ (leftButton, BLeft),
+          (middleButton, BMiddle),
+          (rightButton, BRight),
+          (scrollUp, BScrollUp),
+          (scrollDown, BScrollDown)
+        ]
+   in maybe failParse return (lookup (mods .&. buttonMask) buttonMap)
 
 getModifiers :: Int -> [Modifier]
 getModifiers mods =
-    catMaybes [ if mods `hasBitSet` shiftBit then Just MShift else Nothing
-              , if mods `hasBitSet` metaBit  then Just MMeta  else Nothing
-              , if mods `hasBitSet` ctrlBit  then Just MCtrl  else Nothing
-              ]
+  catMaybes
+    [ if mods `hasBitSet` shiftBit then Just MShift else Nothing,
+      if mods `hasBitSet` metaBit then Just MMeta else Nothing,
+      if mods `hasBitSet` ctrlBit then Just MCtrl else Nothing
+    ]
 
 -- Attempt to classify a control sequence as a "normal" mouse event. To
 -- get here we should have already read "\ESC[M" so that will not be
 -- included in the string to be parsed.
 classifyNormalMouseEvent :: Parser Event
 classifyNormalMouseEvent = do
-    statusChar <- readChar
-    xCoordChar <- readChar
-    yCoordChar <- readChar
+  statusChar <- readChar
+  xCoordChar <- readChar
+  yCoordChar <- readChar
 
-    let xCoord = fromEnum xCoordChar - 32
-        yCoord = fromEnum yCoordChar - 32
-        status = fromEnum statusChar
-        modifiers = getModifiers status
+  let xCoord = fromEnum xCoordChar - 32
+      yCoord = fromEnum yCoordChar - 32
+      status = fromEnum statusChar
+      modifiers = getModifiers status
 
-    let press = status .&. buttonMask /= 3
-    case press of
-            True -> do
-                button <- getSGRButton status
-                return $ EvMouseDown (xCoord-1) (yCoord-1) button modifiers
-            False -> return $ EvMouseUp (xCoord-1) (yCoord-1) Nothing
+  let press = status .&. buttonMask /= 3
+
+  if press
+    then do
+      button <- getSGRButton status
+      return $ EvMouseDown (xCoord - 1) (yCoord - 1) button modifiers
+    else return $ EvMouseUp (xCoord - 1) (yCoord - 1) Nothing
 
 -- Attempt to classify a control sequence as an SGR mouse event. To
 -- get here we should have already read "\ESC[<" so that will not be
 -- included in the string to be parsed.
 classifySGRMouseEvent :: Parser Event
 classifySGRMouseEvent = do
-    mods <- readInt
-    expectChar ';'
-    xCoord <- readInt
-    expectChar ';'
-    yCoord <- readInt
-    final <- readChar
+  mods <- readInt
+  expectChar ';'
+  xCoord <- readInt
+  expectChar ';'
+  yCoord <- readInt
+  final <- readChar
 
-    let modifiers = getModifiers mods
-    button <- getSGRButton mods
-    case final of
-        'M' -> return $ EvMouseDown (xCoord-1) (yCoord-1) button modifiers
-        'm' -> return $ EvMouseUp   (xCoord-1) (yCoord-1) (Just button)
-        _ -> failParse
+  let modifiers = getModifiers mods
+  button <- getSGRButton mods
+
+  case final of
+    'M' -> return $ EvMouseDown (xCoord - 1) (yCoord - 1) button modifiers
+    'm' -> return $ EvMouseUp (xCoord - 1) (yCoord - 1) (Just button)
+    _ -> failParse

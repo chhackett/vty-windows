@@ -1,25 +1,22 @@
 -- | This module provides a simple parser for parsing input event
 -- control sequences.
 module Graphics.Vty.Platform.Windows.Input.Classify.Parse
-  ( Parser
-  , runParser
-  , failParse
-  , readInt
-  , readChar
-  , expectChar
+  ( Parser,
+    runParser,
+    failParse,
+    readInt,
+    readChar,
+    expectChar,
   )
 where
 
 import Control.Monad (unless)
-import Control.Monad.Trans.Maybe ( MaybeT(runMaybeT) )
-import Control.Monad.State
-    ( MonadState(put, get), State, runState )
-
-import qualified Data.ByteString.Char8 as BS8
+import Control.Monad.State (MonadState (..), State, gets, runState)
+import Control.Monad.Trans.Maybe (MaybeT (..))
 import Data.ByteString.Char8 (ByteString)
-import Graphics.Vty.Input.Events ( Event )
-import Graphics.Vty.Platform.Windows.Input.Classify.Types
-    ( KClass(Valid, Invalid) )
+import qualified Data.ByteString.Char8 as BS8
+import Graphics.Vty.Input.Events (Event)
+import Graphics.Vty.Platform.Windows.Input.Classify.Types (KClass (..))
 
 -- | Represents current state of parsing input data
 type Parser a = MaybeT (State ByteString) a
@@ -29,9 +26,9 @@ type Parser a = MaybeT (State ByteString) a
 -- remaining unparsed characters.
 runParser :: ByteString -> Parser Event -> KClass
 runParser s parser =
-    case runState (runMaybeT parser) s of
-        (Nothing, _)        -> Invalid
-        (Just e, remaining) -> Valid e remaining
+  case runState (runMaybeT parser) s of
+    (Nothing, _) -> Invalid
+    (Just e, remaining) -> Valid e remaining
 
 -- | Fail a parsing operation.
 failParse :: Parser a
@@ -42,23 +39,23 @@ failParse = fail "invalid parse"
 -- return '123' and consume those characters.
 readInt :: Parser Int
 readInt = do
-    s <- BS8.unpack <$> get
-    case (reads :: ReadS Int) s of
-        [(i, rest)] -> put (BS8.pack rest) >> return i
-        _ -> failParse
+  s <- gets BS8.unpack
+  case (reads :: ReadS Int) s of
+    [(i, rest)] -> put (BS8.pack rest) >> return i
+    _ -> failParse
 
 -- | Read a character from the input stream. If one cannot be read (e.g.
 -- we are out of characters), fail parsing.
 readChar :: Parser Char
 readChar = do
-    s <- get
-    case BS8.uncons s of
-        Just (c,rest) -> put rest >> return c
-        Nothing -> failParse
+  s <- get
+  case BS8.uncons s of
+    Just (c, rest) -> put rest >> return c
+    Nothing -> failParse
 
 -- | Read a character from the input stream and fail parsing if it is
 -- not the specified character.
 expectChar :: Char -> Parser ()
 expectChar c = do
-    c' <- readChar
-    unless (c' == c) failParse
+  c' <- readChar
+  unless (c' == c) failParse

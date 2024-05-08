@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               vty-windows
-version:            0.2.0.3
+version:            0.2.0.4
 license:            BSD-3-Clause
 license-file:       LICENSE
 author:             Chris hackett
@@ -22,9 +22,7 @@ common warnings
 library
     import:           warnings
     c-sources:        cbits/win_commands.c
-    exposed-modules:  Data.Terminfo.Eval
-                      Data.Terminfo.Parse
-                      Graphics.Vty.Platform.Windows
+    exposed-modules:  Graphics.Vty.Platform.Windows
                       Graphics.Vty.Platform.Windows.Input
                       Graphics.Vty.Platform.Windows.Input.Loop
                       Graphics.Vty.Platform.Windows.Input.Terminfo
@@ -36,11 +34,11 @@ library
                       Graphics.Vty.Platform.Windows.Input.Classify.Parse
                       Graphics.Vty.Platform.Windows.Input.Classify.Types
                       Graphics.Vty.Platform.Windows.Output
+                      Graphics.Vty.Platform.Windows.Output.AnsiSequences
                       Graphics.Vty.Platform.Windows.Output.TerminfoBased
                       Graphics.Vty.Platform.Windows.Output.XTermColor
-                      Graphics.Vty.Platform.Windows.Output.Color
+                      Graphics.Vty.Platform.Windows.Output.WindowSizer
                       Graphics.Vty.Platform.Windows.Settings
-                      Graphics.Vty.Platform.Windows.WindowsCapabilities
                       Graphics.Vty.Platform.Windows.WindowsConsoleInput
                       Graphics.Vty.Platform.Windows.WindowsInterfaces
     build-depends:    base                >= 4.9 && < 5,

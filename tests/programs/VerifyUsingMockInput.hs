@@ -6,11 +6,6 @@
 -- Verify the events produced are as expected.
 module Main where
 
--- import Graphics.Vty.Platform.Windows.Settings
---     ( defaultSettings,
---       WindowsSettings(..)
---     )
-
 import Graphics.Vty hiding (resize)
 
 import Graphics.Vty.Platform.Windows.Input.Loop ( initInput )
