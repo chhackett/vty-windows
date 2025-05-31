@@ -8,7 +8,9 @@ where
 
 import Data.Maybe (fromMaybe)
 import System.Environment (lookupEnv)
-import System.IO (Handle, stdin, stdout)
+import System.IO (Handle, stdin)
+import Graphics.Vty.Platform.Windows.WindowsInterfaces (configureHandle)
+import System.Win32.Types (hANDLEToHandle)
 
 -- | Runtime library settings for interacting with Windows terminals.
 data WindowsSettings = WindowsSettings
@@ -26,11 +28,12 @@ defaultSettings :: IO WindowsSettings
 defaultSettings = do
   mb <- lookupEnv termVariable
   let termName = fromMaybe "xterm-256color" mb
+  outHandle <- configureHandle "CONOUT$" >>= hANDLEToHandle
 
   return $
     WindowsSettings
       { settingInputFd = stdin,
-        settingOutputFd = stdout,
+        settingOutputFd = outHandle,
         settingTermName = termName
       }
 

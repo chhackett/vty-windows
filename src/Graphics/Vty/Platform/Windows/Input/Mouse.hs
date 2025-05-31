@@ -3,9 +3,7 @@
 --
 -- http://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h2-Mouse-Tracking
 module Graphics.Vty.Platform.Windows.Input.Mouse
-  ( requestMouseEvents,
-    disableMouseEvents,
-    isMouseEvent,
+  ( isMouseEvent,
     classifyMouseEvent,
   )
 where
@@ -33,15 +31,6 @@ import Graphics.Vty.Platform.Windows.Input.Classify.Types
 -- * Y is the Y coordinate of the event starting at 1
 
 -- * the final character is 'M' for a press, 'm' for a release
-
--- | These sequences set xterm-based terminals to send mouse event
--- sequences.
-requestMouseEvents :: ByteString
-requestMouseEvents = BS8.pack "\ESC[?1000h\ESC[?1002h\ESC[?1006h"
-
--- | These sequences disable mouse events.
-disableMouseEvents :: ByteString
-disableMouseEvents = BS8.pack "\ESC[?1000l\ESC[?1002l\ESC[?1006l"
 
 -- | Does the specified string begin with a mouse event?
 isMouseEvent :: ByteString -> Bool

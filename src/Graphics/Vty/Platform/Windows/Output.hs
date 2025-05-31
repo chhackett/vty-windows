@@ -8,10 +8,11 @@ module Graphics.Vty.Platform.Windows.Output
   )
 where
 
+import Data.Maybe (fromMaybe)
 import Graphics.Vty.Attributes.Color (ColorMode(..))
 import Graphics.Vty.Config (VtyUserConfig(..))
 import Graphics.Vty.Platform.Windows.Settings (WindowsSettings(..))
-import Graphics.Vty.Platform.Windows.Output.XTermColor (reserveTerminal)
+import Graphics.Vty.Platform.Windows.Output.TerminfoBased (reserveTerminal)
 import Graphics.Vty.Output (Output)
 
 -- | Returns an `Output` for the terminal.
@@ -22,9 +23,6 @@ buildOutput :: VtyUserConfig -> WindowsSettings -> IO Output
 buildOutput config settings = do
     let outHandle = settingOutputFd settings
         termName = settingTermName settings
-
-    colorMode <- case configPreferredColorMode config of
-        Nothing -> return FullColor
-        Just m  -> return m
+        colorMode = fromMaybe FullColor $ configPreferredColorMode config
 
     reserveTerminal termName outHandle colorMode

@@ -1,6 +1,6 @@
 -- | Input mappings for Windows terminals
 -- pulled directly from https://learn.microsoft.com/en-us/windows/console/console-virtual-terminal-sequences#input-sequences
-module Graphics.Vty.Platform.Windows.Input.Terminfo.ANSIVT
+module Graphics.Vty.Platform.Windows.Input.WindowsInputSequences
   ( classifyTable,
   )
 where

@@ -1,8 +1,6 @@
 -- | Escape sequences for focus events and some focus related functions
 module Graphics.Vty.Platform.Windows.Input.Focus
-  ( requestFocusEvents,
-    disableFocusEvents,
-    isFocusEvent,
+  ( isFocusEvent,
     classifyFocusEvent,
   )
 where
@@ -13,15 +11,6 @@ import qualified Data.ByteString.Char8 as BS8
 import Graphics.Vty.Input.Events (Event (EvGainedFocus, EvLostFocus))
 import Graphics.Vty.Platform.Windows.Input.Classify.Parse (expectChar, failParse, readChar, runParser)
 import Graphics.Vty.Platform.Windows.Input.Classify.Types (KClass)
-
--- | These sequences set xterm-based terminals to send focus event
--- sequences.
-requestFocusEvents :: ByteString
-requestFocusEvents = BS8.pack "\ESC[?1004h"
-
--- | These sequences disable focus events.
-disableFocusEvents :: ByteString
-disableFocusEvents = BS8.pack "\ESC[?1004l"
 
 -- | Does the specified string begin with a focus event?
 isFocusEvent :: ByteString -> Bool

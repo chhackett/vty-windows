@@ -40,17 +40,17 @@ import Graphics.Vty.Config (VtyUserConfig (..))
 import Graphics.Vty.Input
 import Graphics.Vty.Platform.Windows.Input.Classify (classify)
 import Graphics.Vty.Platform.Windows.Input.Classify.Types
-import Graphics.Vty.Platform.Windows.WindowsConsoleInput (WinConsoleInputEvent)
 import Graphics.Vty.Platform.Windows.WindowsInterfaces (readBuf)
 import Lens.Micro (ASetter, ASetter', over)
 import Lens.Micro.Mtl (use, (.=))
 import Lens.Micro.TH (makeLenses)
 import System.Environment (getEnv)
 import System.IO (Handle)
+import System.Win32.Console (INPUT_RECORD)
 
 data InputBuffer = InputBuffer
   { _ptr :: Ptr Word8,
-    _inputRecordPtr :: Ptr WinConsoleInputEvent,
+    _inputRecordPtr :: Ptr INPUT_RECORD,
     _consoleEventBufferSize :: Int
   }
 
@@ -146,20 +146,20 @@ dropInvalid = do
 
 runInputProcessorLoop :: ClassifyMap -> Input -> Handle -> IO ()
 runInputProcessorLoop classifyTable input handle = do
-  let bufferSize = 1024
-  -- A key event could require 4 bytes of UTF-8.
-  let maxKeyEvents = bufferSize `div` 4
-  allocaArray maxKeyEvents $ \(inputRecordBuf :: Ptr WinConsoleInputEvent) -> do
-    allocaArray bufferSize $ \(bufferPtr :: Ptr Word8) -> do
-      let s0 =
-            InputState
-              BS8.empty
-              ClassifierStart
-              handle
-              input
-              (InputBuffer bufferPtr inputRecordBuf maxKeyEvents)
-              (classify classifyTable)
-      runReaderT (evalStateT loopInputProcessor s0) input
+    let bufferSize = 1024
+    -- A key event could require 4 bytes of UTF-8.
+    let maxKeyEvents = bufferSize `div` 4
+    allocaArray maxKeyEvents $ \(inputRecordBuf :: Ptr INPUT_RECORD) -> do
+      allocaArray bufferSize $ \(bufferPtr :: Ptr Word8) -> do
+        let s0 =
+              InputState
+                BS8.empty
+                ClassifierStart
+                handle
+                input
+                (InputBuffer bufferPtr inputRecordBuf maxKeyEvents)
+                (classify classifyTable)
+        runReaderT (evalStateT loopInputProcessor s0) input
 
 initInput :: VtyUserConfig -> Handle -> ClassifyMap -> IO Input
 initInput userConfig handle classifyTable = do

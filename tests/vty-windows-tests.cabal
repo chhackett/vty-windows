@@ -5,7 +5,7 @@ license-file:        LICENSE
 author:              Chris hackett
 maintainer:          chris.h.hackett@gmail.com
 category:            User Interfaces
-synopsis:            Test suite for the Vty-windows library
+synopsis:            Test suite for the vty-windows library
 cabal-version:       1.18
 build-type:          Simple
 extra-doc-files:     LICENSE

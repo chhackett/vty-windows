@@ -14,12 +14,12 @@ import Graphics.Vty.Input.Events
     Key (..),
     Modifier (..),
   )
-import qualified Graphics.Vty.Platform.Windows.Input.Terminfo.ANSIVT as ANSIVT
+import  Graphics.Vty.Platform.Windows.Input.WindowsInputSequences (classifyTable)
 
 -- | Builds input sequences for all VT sequences available on Windows
 classifyMapForTerm :: ClassifyMap
 classifyMapForTerm =
-  concat $ universalTable : ANSIVT.classifyTable
+  concat $ universalTable : classifyTable
 
 -- | Combined tables.
 universalTable :: ClassifyMap
