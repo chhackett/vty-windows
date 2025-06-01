@@ -39,3 +39,7 @@ Package changes:
 -------
 * Now vty-windows supports running in MSYS/MSYS2 terminals. This was achieved by modifying
   the way the input and output buffers are initialized.
+
+0.2.0.4
+-------
+* Use readConsoleInput API provided by Win32 library.
